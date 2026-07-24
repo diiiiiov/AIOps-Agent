@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0.0",
+  "total_cases": 1000,
+  "splits": {"development": 200, "sealed_test": 800},
+  "difficulty": {"easy": 250, "medium": 500, "hard": 250},
+  "root_cause_mode": {"single": 700, "multiple": 300},
+  "cross_tenant_risk": {"false": 750, "true": 250},
+  "categories": {
+    "service_availability": {"total": 130, "cross_tenant": 28, "multiple": 39},
+    "api_latency_timeout": {"total": 140, "cross_tenant": 28, "multiple": 42},
+    "cpu_saturation": {"total": 90, "cross_tenant": 18, "multiple": 27},
+    "memory_oom": {"total": 90, "cross_tenant": 18, "multiple": 27},
+    "database": {"total": 120, "cross_tenant": 26, "multiple": 36},
+    "network_dependency": {"total": 110, "cross_tenant": 24, "multiple": 33},
+    "deployment_configuration": {"total": 100, "cross_tenant": 22, "multiple": 30},
+    "business_error": {"total": 100, "cross_tenant": 20, "multiple": 30},
+    "storage_queue_capacity": {"total": 70, "cross_tenant": 16, "multiple": 21},
+    "security_tenant": {"total": 50, "cross_tenant": 50, "multiple": 15}
+  },
+  "development_allocations": {
+    "cross_tenant": {
+      "service_availability": 6, "api_latency_timeout": 6, "cpu_saturation": 4,
+      "memory_oom": 4, "database": 5, "network_dependency": 5,
+      "deployment_configuration": 4, "business_error": 3,
+      "storage_queue_capacity": 3, "security_tenant": 10
+    },
+    "multiple": {
+      "service_availability": 8, "api_latency_timeout": 8, "cpu_saturation": 5,
+      "memory_oom": 5, "database": 7, "network_dependency": 7,
+      "deployment_configuration": 6, "business_error": 6,
+      "storage_queue_capacity": 4, "security_tenant": 4
+    }
+  }
+}

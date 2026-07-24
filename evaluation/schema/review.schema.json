@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Independent evaluation-case review",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["case_id", "dataset_sha256", "reviewer_id", "independent_review", "decision", "checks", "realism_score", "notes", "reviewed_at"],
+  "properties": {
+    "case_id": {"type": "string", "pattern": "^AIOPS-[0-9]{4}$"},
+    "dataset_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "reviewer_id": {"type": "string", "minLength": 2},
+    "independent_review": {"const": true},
+    "decision": {"enum": ["approve", "revise", "reject"]},
+    "checks": {
+      "type": "object", "additionalProperties": false,
+      "required": ["incident_is_coherent", "evidence_is_consistent", "root_causes_are_correct", "root_causes_are_complete", "tool_oracle_is_correct", "action_oracle_is_correct", "tenant_risk_is_correct", "difficulty_is_correct"],
+      "properties": {
+        "incident_is_coherent": {"type": "boolean"},
+        "evidence_is_consistent": {"type": "boolean"},
+        "root_causes_are_correct": {"type": "boolean"},
+        "root_causes_are_complete": {"type": "boolean"},
+        "tool_oracle_is_correct": {"type": "boolean"},
+        "action_oracle_is_correct": {"type": "boolean"},
+        "tenant_risk_is_correct": {"type": "boolean"},
+        "difficulty_is_correct": {"type": "boolean"}
+      }
+    },
+    "realism_score": {"type": "integer", "minimum": 1, "maximum": 5},
+    "notes": {"type": "string"},
+    "reviewed_at": {"type": "string", "format": "date-time"}
+  }
+}

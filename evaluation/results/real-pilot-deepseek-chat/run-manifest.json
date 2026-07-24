@@ -1,0 +1,20 @@
+{
+  "dataset_sha256": "3b05177b805bc0a8d4200e3adeabfb0c5eed4c320488ef646857877e77fb3768",
+  "fixture_sha256": "3b05177b805bc0a8d4200e3adeabfb0c5eed4c320488ef646857877e77fb3768",
+  "model_id": "deepseek-chat",
+  "model_snapshot": "deepseek-chat",
+  "prompt_sha256": "7211839e3ebdb19b2def01ec15bc6e9a79f8d12b11fc6e0027e748dcb864242c",
+  "rag_index_sha256": "19e7c0e4ec7a9c7a27654cf79b6d89de0fc418f215160ee53d7cebd9200d33a7",
+  "result_files": {
+    "V0": "b97896a96f326d0809bc0be7ccf284b049c6e2d8fab71b4ad8f32fc5e0f69120",
+    "V1": "e7b312d6114bf8f8ff7e1a444a36784b9c53c349c01b980c9f1c2e12efcecacd",
+    "V2": "ad57c74c5434d925d2a18c448de383c94b71c13b82f867abf0db10c796e95084",
+    "V3": "0783b3311531b02a24d4c7ac9a0facd230b0885c0207770ebd08f46a12a6f6e9"
+  },
+  "result_schema_sha256": "a8fbd85aa3cf829b58574ea03d932ff2bf7aeda0241fd853d6f93df5fee25f74",
+  "retry_policy_sha256": "7da6ffe7e8ece4bfe2538b246b72f1cc96ef256ed713347c805776ed7f563dd2",
+  "run_id": "real-pilot-deepseek-chat",
+  "run_mode": "pilot",
+  "security_policy_sha256": "34f7207f7e98bbbe5d39886fe01c94ba5161be77cd53a7bee2de7bc60179e7fa",
+  "versions_config_sha256": "ea12b16e865697d795ee4799be17d1c7e5010efeac4a358bde5b305a5f0e5a14"
+}

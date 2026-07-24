@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Four-version evaluation run manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["run_id", "run_mode", "dataset_sha256", "versions_config_sha256", "result_schema_sha256", "model_id", "model_snapshot", "prompt_sha256", "fixture_sha256", "rag_index_sha256", "retry_policy_sha256", "security_policy_sha256", "result_files"],
+  "properties": {
+    "run_id": {"type": "string", "minLength": 4},
+    "run_mode": {"enum": ["smoke_replay", "pilot", "development", "formal"]},
+    "dataset_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "versions_config_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "result_schema_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "model_id": {"type": "string", "minLength": 1},
+    "model_snapshot": {"type": "string", "minLength": 1},
+    "prompt_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "fixture_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "rag_index_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "retry_policy_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "security_policy_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "result_files": {
+      "type": "object", "additionalProperties": false,
+      "required": ["V0", "V1", "V2", "V3"],
+      "properties": {
+        "V0": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "V1": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "V2": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "V3": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+      }
+    }
+  }
+}

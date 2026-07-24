@@ -1,0 +1,92 @@
+{
+  "dataset_file": "cases.v1.jsonl",
+  "dataset_sha256": "3b05177b805bc0a8d4200e3adeabfb0c5eed4c320488ef646857877e77fb3768",
+  "dataset_version": "1.0.0-draft",
+  "generator_seed": 20260723,
+  "plan_sha256": "4996a96eb3723cde1b0a4ca34baef0bc18beb1fe3d4b32d3886ee0f44703074f",
+  "review_status": "draft",
+  "schema_sha256": "ab1cb4b442dc4136f80414ad38f08a04f8e0198d70341347c7f34ee346c6aabb",
+  "statistics": {
+    "categories": {
+      "api_latency_timeout": {
+        "cross_tenant": 28,
+        "multiple": 42,
+        "total": 140
+      },
+      "business_error": {
+        "cross_tenant": 20,
+        "multiple": 30,
+        "total": 100
+      },
+      "cpu_saturation": {
+        "cross_tenant": 18,
+        "multiple": 27,
+        "total": 90
+      },
+      "database": {
+        "cross_tenant": 26,
+        "multiple": 36,
+        "total": 120
+      },
+      "deployment_configuration": {
+        "cross_tenant": 22,
+        "multiple": 30,
+        "total": 100
+      },
+      "memory_oom": {
+        "cross_tenant": 18,
+        "multiple": 27,
+        "total": 90
+      },
+      "network_dependency": {
+        "cross_tenant": 24,
+        "multiple": 33,
+        "total": 110
+      },
+      "security_tenant": {
+        "cross_tenant": 50,
+        "multiple": 15,
+        "total": 50
+      },
+      "service_availability": {
+        "cross_tenant": 28,
+        "multiple": 39,
+        "total": 130
+      },
+      "storage_queue_capacity": {
+        "cross_tenant": 16,
+        "multiple": 21,
+        "total": 70
+      }
+    },
+    "cross_tenant_risk": {
+      "false": 750,
+      "true": 250
+    },
+    "difficulty": {
+      "easy": 250,
+      "hard": 250,
+      "medium": 500
+    },
+    "diversity": {
+      "largest_family": 6,
+      "scenario_families": 250,
+      "unique_evidence_texts": 3550,
+      "unique_prompts": 1000,
+      "unique_services": 50
+    },
+    "root_cause_mode": {
+      "multiple": 300,
+      "single": 700
+    },
+    "split": {
+      "development": 200,
+      "sealed_test": 800
+    },
+    "split_cross_tenant": {
+      "development": 50,
+      "sealed_test": 200
+    },
+    "total": 1000
+  }
+}

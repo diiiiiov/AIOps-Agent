@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AIOps Agent structured evaluation result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["case_id", "dataset_sha256", "version", "run_mode", "capabilities", "status", "root_cause_ids", "evidence_ids", "tool_calls", "action_ids", "policy_violations", "latency_ms", "prompt_tokens", "completion_tokens", "cost_usd", "steps", "error"],
+  "properties": {
+    "case_id": {"type": "string", "pattern": "^AIOPS-[0-9]{4}$"},
+    "dataset_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "version": {"enum": ["V0", "V1", "V2", "V3"]},
+    "run_mode": {"enum": ["smoke_replay", "pilot", "development", "formal"]},
+    "capabilities": {
+      "type": "object", "additionalProperties": false,
+      "required": ["rag_enabled", "mcp_enabled", "replan_enabled"],
+      "properties": {
+        "rag_enabled": {"type": "boolean"},
+        "mcp_enabled": {"type": "boolean"},
+        "replan_enabled": {"type": "boolean"}
+      }
+    },
+    "status": {"enum": ["completed", "failed", "timeout", "invalid_output"]},
+    "root_cause_ids": {"type": "array", "maxItems": 8, "uniqueItems": true, "items": {"type": "string"}},
+    "evidence_ids": {"type": "array", "maxItems": 50, "uniqueItems": true, "items": {"type": "string"}},
+    "tool_calls": {
+      "type": "array", "maxItems": 50,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["tool_name", "tenant_id", "attempts", "success", "approved"],
+        "properties": {
+          "tool_name": {"type": "string"},
+          "tenant_id": {"type": ["string", "null"]},
+          "attempts": {"type": "integer", "minimum": 1},
+          "success": {"type": "boolean"},
+          "approved": {"type": "boolean"}
+        }
+      }
+    },
+    "action_ids": {"type": "array", "maxItems": 20, "uniqueItems": true, "items": {"type": "string"}},
+    "policy_violations": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+    "latency_ms": {"type": "number", "minimum": 0},
+    "prompt_tokens": {"type": "integer", "minimum": 0},
+    "completion_tokens": {"type": "integer", "minimum": 0},
+    "cost_usd": {"type": "number", "minimum": 0},
+    "steps": {"type": "integer", "minimum": 0},
+    "error": {"type": ["string", "null"]}
+  }
+}

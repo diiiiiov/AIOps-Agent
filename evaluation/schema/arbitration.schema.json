@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Evaluation-case review arbitration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["case_id", "dataset_sha256", "arbitrator_id", "reviewer_ids", "decision", "rationale", "arbitrated_at"],
+  "properties": {
+    "case_id": {"type": "string", "pattern": "^AIOPS-[0-9]{4}$"},
+    "dataset_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "arbitrator_id": {"type": "string", "minLength": 2},
+    "reviewer_ids": {"type": "array", "minItems": 2, "maxItems": 2, "uniqueItems": true, "items": {"type": "string"}},
+    "decision": {"enum": ["approve", "revise", "reject"]},
+    "rationale": {"type": "string", "minLength": 20},
+    "arbitrated_at": {"type": "string", "format": "date-time"}
+  }
+}

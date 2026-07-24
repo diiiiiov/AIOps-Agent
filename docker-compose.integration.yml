@@ -1,0 +1,108 @@
+name: super-biz-agent-integration
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: super_biz_agent_test
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: test
+    ports:
+      - "127.0.0.1:55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test -d super_biz_agent_test"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    tmpfs:
+      - /var/lib/postgresql/data
+
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.18
+    command: >-
+      etcd -advertise-client-urls=http://etcd:2379
+      -listen-client-urls=http://0.0.0.0:2379
+      --data-dir=/etcd
+    environment:
+      ETCD_AUTO_COMPACTION_MODE: revision
+      ETCD_AUTO_COMPACTION_RETENTION: "1000"
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    tmpfs:
+      - /etcd
+
+  minio:
+    image: minio/minio:RELEASE.2023-03-20T20-16-18Z
+    command: minio server /data
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    tmpfs:
+      - /data
+
+  milvus:
+    image: milvusdb/milvus:v2.5.10
+    command: ["milvus", "run", "standalone"]
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+    ports:
+      - "127.0.0.1:19531:19530"
+      - "127.0.0.1:19091:9091"
+    depends_on:
+      etcd:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    tmpfs:
+      - /var/lib/milvus
+
+  mcp-cls:
+    profiles: ["container-mcp"]
+    build:
+      context: .
+      dockerfile: deploy/integration/Dockerfile.mcp
+    command: ["python", "mcp_servers/cls_server.py"]
+    environment:
+      MCP_HOST: 0.0.0.0
+      MCP_PORT: "8003"
+    ports:
+      - "127.0.0.1:18003:8003"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket;s=socket.create_connection(('127.0.0.1',8003),2);s.close()"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  mcp-monitor:
+    profiles: ["container-mcp"]
+    build:
+      context: .
+      dockerfile: deploy/integration/Dockerfile.mcp
+    command: ["python", "mcp_servers/monitor_server.py"]
+    environment:
+      MCP_HOST: 0.0.0.0
+      MCP_PORT: "8004"
+    ports:
+      - "127.0.0.1:18004:8004"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket;s=socket.create_connection(('127.0.0.1',8004),2);s.close()"]
+      interval: 3s
+      timeout: 3s
+      retries: 20

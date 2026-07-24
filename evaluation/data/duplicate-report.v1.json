@@ -1,0 +1,11 @@
+{
+  "case_count": 1000,
+  "detector": "character-3gram-jaccard",
+  "exact_cross_family_duplicates": {},
+  "largest_family": 6,
+  "limitation": "Deterministic lexical-semantic prefilter; embedding-based and human review are still required before approval.",
+  "near_duplicate_pairs": [],
+  "scenario_family_count": 250,
+  "status": "pass",
+  "threshold": 0.92
+}
