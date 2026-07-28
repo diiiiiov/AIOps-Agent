@@ -45,11 +45,17 @@ class ModelRouter:
         audit_event("model.switch", resource=self._model, previous_model=previous)
         return self.snapshot()
 
-    def create(self, *, temperature: float = 0, streaming: bool = False) -> ChatOpenAI:
+    def create(
+        self,
+        *,
+        temperature: float = 0,
+        streaming: bool = False,
+        model: str | None = None,
+    ) -> ChatOpenAI:
         with self._lock:
-            model, base_url = self._model, self._base_url
+            routed_model, base_url = self._model, self._base_url
         return ChatOpenAI(
-            model=model, api_key=config.deepseek_api_key, base_url=base_url,
+            model=model or routed_model, api_key=config.deepseek_api_key, base_url=base_url,
             temperature=temperature, streaming=streaming,
         )
 

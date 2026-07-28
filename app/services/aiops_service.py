@@ -1,79 +1,62 @@
-"""
-通用 Plan-Execute-Replan 服务
-基于 LangGraph 官方教程实现
-"""
+"""Supervisor + professional-agent AIOps diagnosis service."""
 
-from typing import AsyncGenerator, Dict, Any
-from langgraph.graph import StateGraph, END
+from collections.abc import AsyncGenerator
+from typing import Any
+
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import END, StateGraph
 from loguru import logger
 
-from app.agent.aiops import PlanExecuteState, planner, executor, replanner
+from app.agent.aiops import (
+    PlanExecuteState,
+    cross_validate,
+    fan_out_specialists,
+    specialist,
+    supervisor,
+)
+from app.core.request_context import get_request_context
 from app.models.aiops import DiagnosisContext
 from app.services.diagnosis_prompt import build_diagnosis_task, extract_root_causes
-from app.core.request_context import get_request_context
-
 
 # 节点名称常量
-NODE_PLANNER = "planner"
-NODE_EXECUTOR = "executor"
-NODE_REPLANNER = "replanner"
+NODE_SUPERVISOR = "supervisor"
+NODE_SPECIALIST = "specialist"
+NODE_CROSS_VALIDATE = "cross_validate"
 
 
 class AIOpsService:
-    """通用 Plan-Execute-Replan 服务"""
+    """Parallel AIOps team coordinated by a Supervisor."""
 
     def __init__(self):
         """初始化服务"""
         self.checkpointer = MemorySaver()
         self.graph = self._build_graph()
-        logger.info("Plan-Execute-Replan Service 初始化完成")
+        logger.info("Supervisor + Specialist Agents Service 初始化完成")
 
     def _build_graph(self):
-        """构建 Plan-Execute-Replan 工作流"""
+        """Build Supervisor -> Send(fan-out) -> validation(fan-in)."""
         logger.info("构建工作流图...")
 
         # 创建状态图
         workflow = StateGraph(PlanExecuteState)
 
         # 添加节点
-        workflow.add_node(NODE_PLANNER, planner)      # 制定计划
-        workflow.add_node(NODE_EXECUTOR, executor)  # 执行步骤
-        workflow.add_node(NODE_REPLANNER, replanner)  # 重新规划
+        workflow.add_node(NODE_SUPERVISOR, supervisor)
+        workflow.add_node(NODE_SPECIALIST, specialist)
+        workflow.add_node(NODE_CROSS_VALIDATE, cross_validate)
 
         # 设置入口点
-        workflow.set_entry_point(NODE_PLANNER)
+        workflow.set_entry_point(NODE_SUPERVISOR)
 
         # 定义边
-        workflow.add_edge(NODE_PLANNER, NODE_EXECUTOR)     # planner -> executor
-        workflow.add_edge(NODE_EXECUTOR, NODE_REPLANNER)   # executor -> replanner
-
-        # replanner 的条件边
-        def should_continue(state: PlanExecuteState) -> str:
-            """判断是否继续执行"""
-            # 如果已经生成了最终响应，结束
-            if state.get("response"):
-                logger.info("已生成最终响应，结束流程")
-                return END
-
-            # 如果还有计划步骤，继续执行
-            plan = state.get("plan", [])
-            if plan:
-                logger.info(f"继续执行，剩余 {len(plan)} 个步骤")
-                return NODE_EXECUTOR
-
-            # 计划为空但没有响应，返回 replanner 生成响应
-            logger.info("计划执行完毕，生成最终响应")
-            return END
-
         workflow.add_conditional_edges(
-            NODE_REPLANNER,
-            should_continue,
-            {
-                NODE_EXECUTOR: NODE_EXECUTOR,
-                END: END
-            }
+            NODE_SUPERVISOR,
+            fan_out_specialists,
+            [NODE_SPECIALIST],
         )
+        # LangGraph waits for all Send branches before running this downstream node.
+        workflow.add_edge(NODE_SPECIALIST, NODE_CROSS_VALIDATE)
+        workflow.add_edge(NODE_CROSS_VALIDATE, END)
 
         # 编译工作流
         compiled_graph = workflow.compile(checkpointer=self.checkpointer)
@@ -90,9 +73,9 @@ class AIOpsService:
         self,
         user_input: str,
         session_id: str = "default"
-    ) -> AsyncGenerator[Dict[str, Any], None]:
+    ) -> AsyncGenerator[dict[str, Any], None]:
         """
-        执行 Plan-Execute-Replan 流程
+        执行 Supervisor 并行诊断与交叉验证流程
 
         Args:
             user_input: 用户的任务描述
@@ -107,9 +90,12 @@ class AIOpsService:
             # 初始化状态
             initial_state: PlanExecuteState = {
                 "input": user_input,
+                "assignments": [],
+                "agent_results": [],
                 "plan": [],
                 "past_steps": [],
-                "response": ""
+                "response": "",
+                "arbitration": {},
             }
 
             # 流式执行工作流
@@ -129,14 +115,12 @@ class AIOpsService:
                     logger.info(f"节点 '{node_name}' 输出事件")
 
                     # 根据节点类型生成不同的事件
-                    if node_name == NODE_PLANNER:
-                        yield self._format_planner_event(node_output)
-
-                    elif node_name == NODE_EXECUTOR:
-                        yield self._format_executor_event(node_output)
-
-                    elif node_name == NODE_REPLANNER:
-                        yield self._format_replanner_event(node_output)
+                    if node_name == NODE_SUPERVISOR:
+                        yield self._format_supervisor_event(node_output)
+                    elif node_name == NODE_SPECIALIST:
+                        yield self._format_specialist_event(node_output)
+                    elif node_name == NODE_CROSS_VALIDATE:
+                        yield self._format_validation_event(node_output)
 
             # 获取最终状态
             final_state = await self.graph.aget_state(config_dict)
@@ -145,7 +129,8 @@ class AIOpsService:
             # 安全地获取响应（处理 values 可能为 None 的情况）
             final_values = final_state.values if final_state and final_state.values else {}
             final_response = final_values.get("response", "")
-            final_steps = final_values.get("past_steps", [])
+            agent_results = final_values.get("agent_results", [])
+            arbitration = final_values.get("arbitration", {})
 
             # 发送完成事件
             yield {
@@ -153,13 +138,15 @@ class AIOpsService:
                 "stage": "complete",
                 "message": "任务执行完成",
                 "response": final_response,
+                "arbitration": arbitration,
                 "evidence": [
                     {
                         "id": f"E{i}",
                         "step": step,
                         "observation": result,
                     }
-                    for i, (step, result) in enumerate(final_steps, 1)
+                    for i, result in enumerate(agent_results, 1)
+                    for step in [f"{result.get('agent', 'unknown')} Agent"]
                 ]
             }
 
@@ -177,7 +164,7 @@ class AIOpsService:
         self,
         session_id: str = "default",
         context: DiagnosisContext | None = None,
-    ) -> AsyncGenerator[Dict[str, Any], None]:
+    ) -> AsyncGenerator[dict[str, Any], None]:
         """
         AIOps 诊断接口（兼容旧接口）
 
@@ -205,91 +192,83 @@ class AIOpsService:
                         "root_causes": extract_root_causes(event.get("response", "")),
                         "context": context.model_dump(exclude_none=True) if context else {},
                         "evidence": event.get("evidence", []),
+                        "arbitration": event.get("arbitration", {}),
                     }
                 }
             else:
                 yield event
 
-    def _format_planner_event(self, state: Dict | None) -> Dict:
-        """格式化 Planner 节点事件"""
+    def _format_supervisor_event(self, state: dict | None) -> dict:
+        """Format the Supervisor dispatch event using the legacy plan envelope."""
         if not state:
             return {
                 "type": "status",
-                "stage": "planner",
-                "message": "规划节点执行中"
+                "stage": "supervisor",
+                "message": "Supervisor 正在分派专业调查任务"
             }
 
-        plan = state.get("plan", [])
+        assignments = state.get("assignments", [])
 
         return {
             "type": "plan",
-            "stage": "plan_created",
-            "message": f"执行计划已制定，共 {len(plan)} 个步骤",
-            "plan": plan
+            "stage": "team_dispatched",
+            "message": f"Supervisor 已并行分派 {len(assignments)} 个专业 Agent",
+            "plan": [item.get("task", "") for item in assignments],
+            "agents": [item.get("agent", "") for item in assignments],
         }
 
-    def _format_executor_event(self, state: Dict | None) -> Dict:
-        """格式化 Executor 节点事件"""
+    def _format_specialist_event(self, state: dict | None) -> dict:
+        """Format one result emitted by a parallel specialist branch."""
         if not state:
             return {
                 "type": "status",
-                "stage": "executor",
-                "message": "执行节点运行中"
+                "stage": "specialist",
+                "message": "专业 Agent 调查中"
             }
 
-        plan = state.get("plan", [])
-        past_steps = state.get("past_steps", [])
-
-        if past_steps:
-            last_step, last_result = past_steps[-1]
+        results = state.get("agent_results", [])
+        if results:
+            result = results[-1]
+            agent = result.get("agent", "unknown")
             return {
                 "type": "step_complete",
-                "stage": "step_executed",
-                "message": f"步骤执行完成 ({len(past_steps)}/{len(past_steps) + len(plan)})",
-                "current_step": last_step,
+                "stage": "specialist_complete",
+                "message": f"{agent} Agent 调查完成",
+                "current_step": result.get("task", ""),
                 "evidence": {
-                    "id": f"E{len(past_steps)}",
-                    "step": last_step,
-                    "observation": last_result,
+                    "id": f"agent:{agent}",
+                    "step": f"{agent} Agent",
+                    "observation": result,
                 },
-                "result_preview": last_result[:500],
-                "remaining_steps": len(plan)
+                "result_preview": str(result.get("hypothesis", ""))[:500],
+                "agent": agent,
+                "confidence": result.get("confidence", 0),
             }
-        else:
-            return {
-                "type": "status",
-                "stage": "executor",
-                "message": "开始执行步骤"
-            }
+        return {"type": "status", "stage": "specialist", "message": "专业 Agent 调查中"}
 
-    def _format_replanner_event(self, state: Dict | None) -> Dict:
-        """格式化 Replanner 节点事件"""
+    def _format_validation_event(self, state: dict | None) -> dict:
+        """Format the cross-validation and arbitration event."""
         if not state:
             return {
                 "type": "status",
-                "stage": "replanner",
-                "message": "评估节点运行中"
+                "stage": "cross_validation",
+                "message": "Supervisor 正在交叉验证各 Agent 假设"
             }
 
         response = state.get("response", "")
-        plan = state.get("plan", [])
-
         if response:
-            # 已生成最终响应
             return {
                 "type": "report",
                 "stage": "final_report",
-                "message": "最终报告已生成",
-                "report": response
+                "message": "Supervisor 已完成交叉验证与仲裁",
+                "report": response,
+                "arbitration": state.get("arbitration", {}),
             }
-        else:
-            # 重新规划
-            return {
-                "type": "status",
-                "stage": "replanner",
-                "message": f"评估完成，{'继续执行剩余步骤' if plan else '准备生成最终响应'}",
-                "remaining_steps": len(plan)
-            }
+        return {
+            "type": "status",
+            "stage": "cross_validation",
+            "message": "Supervisor 正在交叉验证各 Agent 假设",
+        }
 
 
 # 全局单例

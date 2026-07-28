@@ -41,8 +41,9 @@ poetry.lock
 *.swo
 *~
 
-# CodeBuddy
+# CodeBuddy / WorkBuddy
 .codebuddy/
+.workbuddy/
 
 # Environment secrets
 .env

@@ -88,6 +88,13 @@ class Settings(BaseSettings):
     rag_top_k: int = 3
     rag_model: str = "deepseek-chat"  # 使用 DeepSeek 对话模型
 
+    # AIOps 专业 Agent 模型。留空时跟随当前全局模型路由；日志扫描可单独
+    # 配置低延迟模型，Supervisor/根因仲裁可配置更强的推理模型。
+    aiops_log_model: str = ""
+    aiops_monitor_model: str = ""
+    aiops_knowledge_model: str = ""
+    aiops_supervisor_model: str = ""
+
     # 文档分块配置
     chunk_max_size: int = 800
     chunk_overlap: int = 100

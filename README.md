@@ -10,7 +10,7 @@
 
 - 🤖 **智能对话** - LangChain 多轮对话 + 流式输出
 - 📚 **RAG 问答** - 向量检索增强，支持文档上传、自动建立向量索引、自动更新知识库
-- 🔧 **AIOps 诊断** - Plan-Execute-Replan 自动故障诊断和根因分析
+- 🔧 **AIOps 诊断** - Supervisor + 并行专业 Agent 自动故障诊断和交叉验证
 - 🌐 **Web 界面** - 现代化 UI，支持多种对话模式：快速问答/流式对话
 - 🔌 **MCP 集成** - 日志查询和监控数据工具接入
 
@@ -177,7 +177,7 @@ super_biz_agent_py/
 │   ├── services/                           # 业务服务层
 │   │   ├── __init__.py
 │   │   ├── rag_agent_service.py            # RAG Agent（LangGraph 状态图）
-│   │   ├── aiops_service.py                # AIOps 服务（计划-执行-重规划）
+│   │   ├── aiops_service.py                # AIOps 服务（Supervisor 并行编排）
 │   │   ├── vector_store_manager.py         # 向量存储管理器
 │   │   ├── vector_embedding_service.py     # 向量embedding服务
 │   │   ├── vector_index_service.py         # 向量索引服务
@@ -188,10 +188,8 @@ super_biz_agent_py/
 │   │   ├── mcp_client.py                   # MCP 客户端（工具调用）
 │   │   └── aiops/                          # AIOps 核心逻辑
 │   │       ├── __init__.py
-│   │       ├── planner.py                  # 计划制定器
-│   │       ├── executor.py                 # 步骤执行器
-│   │       ├── replanner.py                # 重规划器
-│   │       ├── state.py                    # 状态定义
+│   │       ├── team.py                     # Supervisor、专业 Agent 与交叉验证
+│   │       ├── state.py                    # 并行 fan-out/fan-in 状态定义
 │   │       └── utils.py                    # 工具函数
 │   ├── models/                             # 数据模型层
 │   │   ├── __init__.py
@@ -257,12 +255,15 @@ CHUNK_OVERLAP=100
 
 ## 🎯 AIOps 智能运维
 
-基于 **Plan-Execute-Replan** 模式实现自动故障诊断。
+基于 **Supervisor + 专业 Agent 团队** 实现自动故障诊断。Supervisor 使用
+LangGraph `Send` API 将同一事件并行派发给日志、监控和知识 Agent，收齐独立
+假设后进行交叉验证与最终仲裁。
 
 ### 核心特性
-- ✅ 自动制定诊断计划（Planner）
-- ✅ 智能工具调用（Executor）
-- ✅ 动态调整步骤（Replanner）
+- ✅ `Send` fan-out 并行调查，降低串行等待时间
+- ✅ 日志 / 监控 / 知识 Agent 使用独立工具白名单与专属 Prompt
+- ✅ 每个 Agent 可配置不同模型，Supervisor 可使用强推理模型
+- ✅ 多 Agent 独立提出可证伪假设，Supervisor 按证据权重交叉验证
 - ✅ 流式输出诊断过程
 - ✅ 生成结构化报告
 
@@ -282,10 +283,19 @@ curl -X POST "http://localhost:9900/api/aiops" \
 
 ### 诊断流程
 ```
-1. Planner 制定计划 → 生成 4-6 个诊断步骤
-2. Executor 执行步骤 → 调用 MCP 工具（日志查询、监控数据）
-3. Replanner 评估结果 → 决定继续/调整/生成报告
-4. 输出诊断报告 → 根因分析 + 运维建议
+1. Supervisor 分派任务 → 日志 / 监控 / 知识三个独立调查任务
+2. LangGraph Send fan-out → 三个专业 Agent 并行调用各自工具
+3. fan-in 汇聚 → 每个 Agent 提交假设、置信度、证据与反证
+4. Supervisor 仲裁 → 交叉验证冲突并输出根因、证据链与处置建议
+```
+
+可通过环境变量为各角色单独选模；留空时跟随运行时全局模型路由：
+
+```dotenv
+AIOPS_LOG_MODEL=deepseek-chat
+AIOPS_MONITOR_MODEL=deepseek-chat
+AIOPS_KNOWLEDGE_MODEL=deepseek-chat
+AIOPS_SUPERVISOR_MODEL=deepseek-reasoner
 ```
 
 ## 📝 开发指南
@@ -406,7 +416,7 @@ netstat -ano | findstr :8004  # Monitor MCP
 
 - [FastAPI 文档](https://fastapi.tiangolo.com/)
 - [LangChain 文档](https://python.langchain.com/)
-- [LangGraph Plan-Execute](https://langchain-ai.github.io/langgraph/tutorials/plan-and-execute/)
+- [LangGraph](https://langchain-ai.github.io/langgraph/)
 - [阿里云 DashScope](https://dashscope.aliyun.com/)
 - [MCP 协议](https://modelcontextprotocol.io/)
 

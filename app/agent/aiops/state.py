@@ -1,24 +1,44 @@
-"""
-通用 Plan-Execute-Replan 状态定义
-基于 LangGraph 官方教程实现
-"""
+"""State definitions for the Supervisor + specialist AIOps graph."""
 
-from typing import List, TypedDict, Annotated
+from __future__ import annotations
+
 import operator
+from typing import Annotated, Any, TypedDict
 
 
-class PlanExecuteState(TypedDict):
-    """Plan-Execute-Replan 状态"""
-    
-    # 用户输入（任务描述）
+class AgentAssignment(TypedDict):
+    """A bounded investigation delegated by the supervisor."""
+
+    agent: str
+    task: str
+
+
+class AgentResult(TypedDict, total=False):
+    """Evidence and hypothesis returned by one specialist."""
+
+    agent: str
+    task: str
+    hypothesis: str
+    confidence: float
+    evidence: list[str]
+    counter_evidence: list[str]
+    recommended_actions: list[str]
+    status: str
+    error: str
+
+
+class PlanExecuteState(TypedDict, total=False):
+    """Shared state kept under the legacy name for API compatibility."""
+
     input: str
-    
-    # 执行计划（步骤列表）
-    plan: List[str]
-    
-    # 已执行的步骤历史
-    # 使用 operator.add 实现追加式更新（而非覆盖）
-    past_steps: Annotated[List[tuple], operator.add]
-    
-    # 最终响应/报告
+    assignments: list[AgentAssignment]
+    # Populated only in the private state sent to a specialist node.
+    assignment: AgentAssignment
+    # Fan-in reducer: every Send branch appends exactly one result.
+    agent_results: Annotated[list[AgentResult], operator.add]
     response: str
+    arbitration: dict[str, Any]
+
+    # Legacy fields are retained so old checkpoints/readers can be migrated safely.
+    plan: list[str]
+    past_steps: Annotated[list[tuple[str, str]], operator.add]
