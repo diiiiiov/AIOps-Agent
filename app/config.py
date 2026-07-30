@@ -94,6 +94,8 @@ class Settings(BaseSettings):
     aiops_monitor_model: str = ""
     aiops_knowledge_model: str = ""
     aiops_supervisor_model: str = ""
+    # ReAct 多轮工具调用最大迭代次数（全局默认值，可在 agent YAML 中按 agent 覆盖）
+    aiops_specialist_max_iterations: int = 5
 
     # 文档分块配置
     chunk_max_size: int = 800

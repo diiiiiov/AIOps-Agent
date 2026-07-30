@@ -25,6 +25,9 @@ class AgentResult(TypedDict, total=False):
     recommended_actions: list[str]
     status: str
     error: str
+    # ReAct 多轮工具调用追踪记录
+    tool_calls: list[dict[str, Any]]
+    iterations: int
 
 
 class PlanExecuteState(TypedDict, total=False):

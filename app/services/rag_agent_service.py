@@ -151,31 +151,15 @@ class RagAgentService:
         """
         构建系统提示词
 
-        注意：LangChain 框架会自动将工具信息传递给 LLM，
-        因此系统提示词中无需列举具体的工具列表。
+        从 skills/prompts/rag_system.md 加载系统提示词。
+        修改提示词无需改代码，直接编辑 Markdown 文件即可。
 
         Returns:
             str: 系统提示词
         """
-        from textwrap import dedent
+        from app.agent.skill_loader import load_prompt
 
-        return dedent("""
-            你是一个专业的AI助手，能够使用多种工具来帮助用户解决问题。
-
-            工作原则:
-            1. 理解用户需求，选择合适的工具来完成任务
-            2. 当需要获取实时信息或专业知识时，主动使用相关工具
-            3. 基于工具返回的结果提供准确、专业的回答
-            4. 如果工具无法提供足够信息，请诚实地告知用户
-
-            回答要求:
-            - 保持友好、专业的语气
-            - 回答简洁明了，重点突出
-            - 基于事实，不编造信息
-            - 如有不确定的地方，明确说明
-
-            请根据用户的问题，灵活使用可用工具，提供高质量的帮助。
-        """).strip()
+        return load_prompt("rag_system")
 
     def _memory_context(self) -> str:
         context = get_request_context()

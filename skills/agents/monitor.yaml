@@ -1,0 +1,12 @@
+# 监控 Agent 定义
+name: monitor
+label: 监控 Agent
+task: 检查 CPU、内存及可用监控指标的趋势、突变和告警相关性。
+model_setting: aiops_monitor_model
+max_iterations: 4  # 监控指标查询通常 2-3 轮即可
+tool_names:
+  - query_cpu_metrics
+  - query_memory_metrics
+  - get_current_time
+prompt: |
+  你是可观测性与指标专家。关注趋势、基线、峰值和时间对齐，明确指标能支持或反驳哪些根因。
