@@ -15,8 +15,8 @@ are oracle-derived synthetic fixtures and must never appear as project results.
 
 ## Formal result contract
 
-A formal adapter must write four files named `V0.results.jsonl` through
-`V3.results.jsonl`, each conforming to `evaluation/schema/result.schema.json`.
+A formal adapter must write five files named `V0.results.jsonl` through
+`V4.results.jsonl`, each conforming to `evaluation/schema/result.schema.json`.
 The directory must also contain `run-manifest.json` conforming to
 `evaluation/schema/run-manifest.schema.json`.
 
@@ -27,7 +27,7 @@ The single run manifest freezes conditions shared by all versions:
 - exact model identifier and snapshot;
 - system prompt, MCP fixture and RAG index hashes;
 - retry and security policy hashes;
-- hashes of all four result files.
+- hashes of all five result files.
 
 The scorer rejects capability-boundary violations, stale datasets, modified
 result files, mixed run modes, duplicate cases, or formal runs containing any
@@ -45,5 +45,5 @@ paired comparisons, scenario-family cluster-bootstrap 95% confidence intervals,
 exact McNemar tests for binary metrics, and Holm-adjusted p-values.
 
 The repository currently provides the result contract, scorer and smoke adapter.
-A real V0-V3 model adapter must not be enabled until the sealed test set has been
+A real V0-V4 model adapter must not be enabled until the sealed test set has been
 independently reviewed and approved.

@@ -1,6 +1,6 @@
-# AIOps-Agent
+# OpsDiagnosis
 
-> 企业级智能对话和运维助手，支持 RAG 知识库问答和 AIOps 智能诊断
+> OpsDiagnosis - 企业级智能运维诊断系统，支持 RAG 知识库问答和 AIOps 智能故障诊断
 
 [![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-green.svg)](https://fastapi.tiangolo.com/)
@@ -21,6 +21,14 @@
 - **向量库**: Milvus
 - **工具协议**: MCP (Model Context Protocol)
 
+## 📌 当前版本能力概览
+
+1. **AIOps Agent 工作流**：采用 Supervisor + 日志、监控、知识三个专业 Agent 的并行 fan-out/fan-in 流程，覆盖任务分派、工具执行、证据分析、交叉验证、异常降级和结构化结果生成。Planner–Executor–Replanner 仅作为兼容的历史实现与 V0–V3 评测基线保留。
+2. **统一 MCP 工具网关**：接入日志、监控指标和服务拓扑工具，提供参数校验、失败重试、租户权限隔离、人工审批和调用审计，阻断越权访问及高风险未授权操作。
+3. **Milvus RAG 检索**：对运维文档进行切分、向量化和检索，并按租户上下文过滤，为 Agent 提供故障模式、历史案例和处置建议；历史知识不会替代现场证据。
+4. **任务与运行治理**：通过 FastAPI 提供诊断、任务管理和审批接口；任务状态、对话记忆、审批和用量记录支持 SQLite 默认后端，并可切换 PostgreSQL。系统支持任务心跳、优先级、失败重试、并发控制，以及 token、延迟和成本统计。
+5. **新版评估体系**：保留 1000 条、10 类故障的结构化数据集，将评估矩阵从 V0–V3 扩展为 V0–V4；V4 新增多 Agent 分支成功率、专业证据召回、交叉验证完成率和并行加速比。旧版开发集结果（V3 根因 F1 0.973、较 V2 提升 52.4 个百分点）属于历史单 Agent 对比，当前 V4 必须重新评测。
+
 ## 🚀 快速开始
 
 ### 环境要求
@@ -34,7 +42,7 @@
 ```bash
 # 1. 克隆项目
 git clone <repository_url>
-cd super_biz_agent_py
+cd ops_diagnosis
 
 # 2. 安装依赖（推荐使用 uv）
 # 方式 1: 使用 uv（推荐，更快）
@@ -64,7 +72,7 @@ make start
 ```powershell
 # 1. 克隆项目
 git clone <repository_url>
-cd super_biz_agent_py
+cd ops_diagnosis
 
 # 2. 创建虚拟环境并安装依赖
 # 方式 1: 使用 uv（推荐，更快）
@@ -163,7 +171,7 @@ curl -X POST "http://localhost:9900/api/aiops" \
 ## 📁 项目结构
 
 ```
-super_biz_agent_py/
+ops_diagnosis/
 ├── app/                                    # 应用核心
 │   ├── __init__.py                         # 包初始化（自动加载日志配置）
 │   ├── main.py                             # FastAPI 应用入口
@@ -258,6 +266,11 @@ CHUNK_OVERLAP=100
 基于 **Supervisor + 专业 Agent 团队** 实现自动故障诊断。Supervisor 使用
 LangGraph `Send` API 将同一事件并行派发给日志、监控和知识 Agent，收齐独立
 假设后进行交叉验证与最终仲裁。
+
+> 架构说明：Planner–Executor–Replanner 是历史实现和 V0–V3 消融评测基线，
+> 当前主线采用 Supervisor + 并行专业 Agent。旧版评测报告中的 V3 数值（根因
+> F1 0.973、相对 V2 提升 52.4 个百分点）仅描述 2026-07-23 的历史实验，
+> 不代表当前 V4 Team 的效果；V4 结果需按新版协作指标重新运行。
 
 ### 核心特性
 - ✅ `Send` fan-out 并行调查，降低串行等待时间

@@ -1,4 +1,4 @@
-"""Validate, score and compare four version result files."""
+"""Validate, score and compare configured evaluation versions."""
 
 from __future__ import annotations
 
@@ -49,6 +49,7 @@ def main() -> None:
 
     cases = {item["case_id"]: item for item in read_jsonl(DATASET)}
     manifest, schema, versions = load(MANIFEST), load(SCHEMA), load(VERSIONS)
+    version_names = list(versions["versions"])
     run_manifest = load(args.results_dir / "run-manifest.json")
     manifest_errors = list(Draft202012Validator(load(RUN_MANIFEST_SCHEMA)).iter_errors(run_manifest))
     if manifest_errors:
@@ -61,7 +62,7 @@ def main() -> None:
         raise ValueError("result schema changed after the run")
     scores_by_version: dict[str, list[dict]] = {}
     run_modes: set[str] = set()
-    for version in ("V0", "V1", "V2", "V3"):
+    for version in version_names:
         path = args.results_dir / f"{version}.results.jsonl"
         if run_manifest["result_files"][version] != file_sha256(path):
             raise ValueError(f"result file hash mismatch: {path}")
@@ -131,7 +132,7 @@ def main() -> None:
     }
     (output_dir / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     with (output_dir / "case-scores.jsonl").open("w", encoding="utf-8", newline="\n") as handle:
-        for version in ("V0", "V1", "V2", "V3"):
+        for version in version_names:
             for score in scores_by_version[version]:
                 handle.write(json.dumps(score, ensure_ascii=False, sort_keys=True) + "\n")
     write_markdown(output_dir / "report.md", report)
@@ -148,12 +149,24 @@ def write_markdown(path: Path, report: dict) -> None:
     elif report["run_mode"] == "pilot":
         rows.extend(["> **WARNING:** Small development pilot. Do not report these preliminary numbers as formal results.", ""])
     rows.extend(["## Overall", "", "| Version | Completion | Root F1 | Tool F1 | Evidence F1 | Action F1 | Leak rate | P95 latency (ms) |", "|---|---:|---:|---:|---:|---:|---:|---:|"])
-    for version in ("V0", "V1", "V2", "V3"):
+    for version in report["versions"]:
         metrics = report["versions"][version]["overall"]["metrics"]
         rows.append(
             f"| {version} | {metrics['task_completed']:.3f} | {metrics['root_f1']:.3f} | "
             f"{metrics['tool_f1']:.3f} | {metrics['evidence_f1']:.3f} | {metrics['action_f1']:.3f} | "
             f"{metrics['cross_tenant_leak']:.3f} | {metrics['latency_p95_ms']:.1f} |"
+        )
+    rows.extend([
+        "", "## Collaboration (V4 Team)", "",
+        "| Version | Specialist success | Specialist evidence recall | Cross-validation | Parallel speedup |",
+        "|---|---:|---:|---:|---:|",
+    ])
+    for version in report["versions"]:
+        metrics = report["versions"][version]["overall"]["metrics"]
+        rows.append(
+            f"| {version} | {metrics['specialist_success_rate']:.3f} | "
+            f"{metrics['specialist_evidence_recall']:.3f} | "
+            f"{metrics['cross_validation_completed']:.3f} | {metrics['parallel_speedup']:.2f}x |"
         )
     rows.extend(["", "## Adjacent-version cluster-bootstrap differences", "", "| Comparison | Metric | Difference | 95% CI |", "|---|---|---:|---:|"])
     for label, comparison in report["comparisons"].items():

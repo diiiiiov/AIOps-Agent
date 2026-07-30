@@ -1,16 +1,16 @@
-name: super-biz-agent-integration
+name: ops-diagnosis-integration
 
 services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: super_biz_agent_test
+      POSTGRES_DB: ops_diagnosis_test
       POSTGRES_USER: test
       POSTGRES_PASSWORD: test
     ports:
       - "127.0.0.1:55432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U test -d super_biz_agent_test"]
+      test: ["CMD-SHELL", "pg_isready -U test -d ops_diagnosis_test"]
       interval: 3s
       timeout: 3s
       retries: 20

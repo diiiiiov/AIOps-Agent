@@ -39,6 +39,19 @@ def test_v3_oracle_replay_scores_perfectly():
     assert score["cross_tenant_leak"] == 0
 
 
+def test_v4_scores_team_collaboration():
+    case = _first_case()
+    manifest = _load(ROOT / "evaluation" / "data" / "manifest.v1.json")
+    versions = _load(ROOT / "evaluation" / "config" / "versions.json")
+    schema = _load(ROOT / "evaluation" / "schema" / "result.schema.json")
+    result = make_result(case, "V4", versions["versions"]["V4"], manifest["dataset_sha256"])
+    validate_result(result, case, dataset_sha256=manifest["dataset_sha256"], schema=schema, versions=versions)
+    score = score_case(case, result)
+    assert score["specialist_success_rate"] == 1
+    assert score["cross_validation_completed"] == 1
+    assert score["parallel_speedup"] >= 1
+
+
 def test_version_boundary_rejects_mcp_calls_in_v0():
     case = _first_case()
     manifest = _load(ROOT / "evaluation" / "data" / "manifest.v1.json")
@@ -74,6 +87,6 @@ def test_smoke_run_manifest_binds_all_result_files():
     manifest = _load(ROOT / "evaluation" / "data" / "manifest.v1.json")
     assert run_manifest["run_mode"] == "smoke_replay"
     assert run_manifest["dataset_sha256"] == manifest["dataset_sha256"]
-    for version in ("V0", "V1", "V2", "V3"):
+    for version in ("V0", "V1", "V2", "V3", "V4"):
         path = directory / f"{version}.results.jsonl"
         assert run_manifest["result_files"][version] == hashlib.sha256(path.read_bytes()).hexdigest()

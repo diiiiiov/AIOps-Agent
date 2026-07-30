@@ -1,6 +1,6 @@
-"""SuperBizAgent Python 版本
+"""OpsDiagnosis Python 版本
 
-基于 LangChain 的智能业务代理系统
+智能运维诊断系统 - 支持 RAG 知识库和 AIOps 智能故障诊断
 """
 
 __version__ = "1.0.0"

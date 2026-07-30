@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://super-biz-agent.local/schemas/evaluation-case-1.0.0.json",
+  "$id": "https://ops-diagnosis.local/schemas/evaluation-case-1.0.0.json",
   "title": "AIOps Agent evaluation case",
   "type": "object",
   "additionalProperties": false,

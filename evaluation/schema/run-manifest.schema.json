@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Four-version evaluation run manifest",
+  "title": "Five-version evaluation run manifest",
   "type": "object",
   "additionalProperties": false,
   "required": ["run_id", "run_mode", "dataset_sha256", "versions_config_sha256", "result_schema_sha256", "model_id", "model_snapshot", "prompt_sha256", "fixture_sha256", "rag_index_sha256", "retry_policy_sha256", "security_policy_sha256", "result_files"],
@@ -19,12 +19,13 @@
     "security_policy_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "result_files": {
       "type": "object", "additionalProperties": false,
-      "required": ["V0", "V1", "V2", "V3"],
+      "required": ["V0", "V1", "V2", "V3", "V4"],
       "properties": {
         "V0": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
         "V1": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
         "V2": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
-        "V3": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+        "V3": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "V4": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
       }
     }
   }

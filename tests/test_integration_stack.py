@@ -21,7 +21,7 @@ def test_postgres_task_store_claims_a_task():
 
     dsn = os.getenv(
         "INTEGRATION_POSTGRES_DSN",
-        "postgresql://test:test@127.0.0.1:55432/super_biz_agent_test",
+        "postgresql://test:test@127.0.0.1:55432/ops_diagnosis_test",
     )
     store = PostgresTaskStore(dsn)
     task_id = f"integration-{uuid4().hex}"

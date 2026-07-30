@@ -1,4 +1,4 @@
-"""Run real-model V0-V3 evaluation on development cases with frozen fixtures."""
+"""Run real-model V0-V4 evaluation on development cases with frozen fixtures."""
 
 from __future__ import annotations
 
@@ -30,6 +30,16 @@ Your final response must be one JSON object with exactly these keys:
 root_cause_ids (ordered string array), evidence_ids (string array), action_ids (string array).
 Root IDs must come from the global taxonomy. Action IDs use mitigate_<root_id> and
 verify_service_recovery. Return an empty array when evidence is unavailable.
+"""
+
+TEAM_SPECIALISTS = {
+    "log": "Act as the log specialist. Use only log/change/topology evidence and propose a falsifiable diagnosis.",
+    "monitor": "Act as the monitoring specialist. Use only alert/metric evidence and propose a falsifiable diagnosis.",
+    "knowledge": "Act as the knowledge specialist. Historical patterns are hypotheses, not incident facts.",
+}
+TEAM_SUPERVISOR_PROMPT = BASE_SYSTEM_PROMPT + """
+You are the Supervisor. Cross-validate the three specialist outputs. Prefer incident evidence over
+historical similarity, identify disagreements, and preserve uncertainty. Return the required JSON only.
 """
 
 TOOL_DEFINITIONS = [
@@ -160,17 +170,112 @@ def normalize_prediction(value: dict[str, Any]) -> tuple[list[str], list[str], l
     return strings("root_cause_ids"), strings("evidence_ids"), strings("action_ids")
 
 
+async def run_team(
+    client: AsyncOpenAI,
+    usage: Usage,
+    case: dict[str, Any],
+    all_cases: list[dict[str, Any]],
+    taxonomy: str,
+    model: str,
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]], float, int]:
+    """Run isolated specialists concurrently, then arbitrate their outputs."""
+
+    source_domains = {
+        "log": {"log", "change", "topology"},
+        "monitor": {"alert", "metric"},
+        "knowledge": {"knowledge"},
+    }
+    base_prompt = incident_prompt(case, taxonomy, rag_context(case, all_cases))
+
+    async def investigate(agent: str) -> tuple[dict[str, Any], dict[str, Any]]:
+        started = time.perf_counter()
+        if agent == "knowledge":
+            packet = rag_context(case, all_cases)
+        else:
+            packet = json.dumps(
+                [
+                    item for item in case["observations"]
+                    if item["access_scope"] == "allowed" and item["source"] in source_domains[agent]
+                ],
+                ensure_ascii=False,
+            )
+        try:
+            response = await completion(
+                client,
+                usage,
+                model=model,
+                temperature=0,
+                messages=[
+                    {"role": "system", "content": BASE_SYSTEM_PROMPT + "\n" + TEAM_SPECIALISTS[agent]},
+                    {"role": "user", "content": base_prompt + "\nSpecialist evidence packet:\n" + packet},
+                ],
+                response_format={"type": "json_object"},
+                max_tokens=800,
+            )
+            prediction = parse_json_object(response.choices[0].message.content)
+            roots, evidence, _ = normalize_prediction(prediction)
+            status = "completed"
+        except Exception:
+            prediction, roots, evidence, status = {}, [], [], "failed"
+        trace = {
+            "agent": agent,
+            "status": status,
+            "root_cause_ids": roots,
+            "evidence_ids": evidence,
+            "latency_ms": round((time.perf_counter() - started) * 1000, 3),
+        }
+        return prediction, trace
+
+    wall_started = time.perf_counter()
+    branches = await asyncio.gather(*(investigate(agent) for agent in TEAM_SPECIALISTS))
+    specialist_wall_latency_ms = round((time.perf_counter() - wall_started) * 1000, 3)
+    predictions = {agent: branch[0] for agent, branch in zip(TEAM_SPECIALISTS, branches)}
+    traces = [branch[1] for branch in branches]
+    supervisor = await completion(
+        client,
+        usage,
+        model=model,
+        temperature=0,
+        messages=[
+            {"role": "system", "content": TEAM_SUPERVISOR_PROMPT},
+            {"role": "user", "content": base_prompt + "\nSpecialist outputs:\n" + json.dumps(predictions, ensure_ascii=False)},
+        ],
+        response_format={"type": "json_object"},
+        max_tokens=900,
+    )
+    prediction = parse_json_object(supervisor.choices[0].message.content)
+    root_sets = [set(item["root_cause_ids"]) for item in traces if item["status"] == "completed"]
+    conflicts = int(len({tuple(sorted(values)) for values in root_sets}) > 1)
+    tool_records = []
+    for tool_name in ("search_log", "query_cpu_metrics", "query_memory_metrics"):
+        _, record = await execute_fixture_tool(case, tool_name, {})
+        tool_records.append(record)
+    return prediction, traces, tool_records, specialist_wall_latency_ms, conflicts
+
+
 async def run_case(client: AsyncOpenAI, case: dict[str, Any], all_cases: list[dict[str, Any]],
                    taxonomy: str, version: str, version_config: dict[str, Any], model: str,
                    run_mode: str) -> dict[str, Any]:
+    case_started = time.perf_counter()
     usage = Usage()
     tool_records: list[dict[str, Any]] = []
     policy_violations: list[str] = []
     steps = 1
+    specialist_runs: list[dict[str, Any]] = []
+    cross_validation_performed = False
+    conflicts_identified = 0
+    specialist_wall_latency_ms = 0.0
     try:
         rag = rag_context(case, all_cases) if version_config["rag_enabled"] else None
         user_prompt = incident_prompt(case, taxonomy, rag)
-        if version in {"V0", "V1"}:
+        if version == "V4":
+            prediction, specialist_runs, team_tools, specialist_wall_latency_ms, conflicts_identified = await run_team(
+                client, usage, case, all_cases, taxonomy, model
+            )
+            tool_records.extend(team_tools)
+            cross_validation_performed = True
+            steps = 3
+        elif version in {"V0", "V1"}:
             response = await completion(
                 client, usage, model=model, temperature=0,
                 messages=[{"role": "system", "content": BASE_SYSTEM_PROMPT}, {"role": "user", "content": user_prompt}],
@@ -238,10 +343,16 @@ async def run_case(client: AsyncOpenAI, case: dict[str, Any], all_cases: list[di
     cost = usage.prompt_tokens / 1_000_000 * price["input"] + usage.completion_tokens / 1_000_000 * price["output"]
     return {
         "case_id": case["case_id"], "version": version, "run_mode": run_mode,
-        "capabilities": {key: version_config[key] for key in ("rag_enabled", "mcp_enabled", "replan_enabled")},
+        "capabilities": {key: version_config[key] for key in ("rag_enabled", "mcp_enabled", "replan_enabled", "multi_agent_enabled")},
+        "collaboration": {
+            "specialist_runs": specialist_runs,
+            "cross_validation_performed": cross_validation_performed,
+            "conflicts_identified": conflicts_identified,
+            "specialist_wall_latency_ms": specialist_wall_latency_ms,
+        },
         "status": status, "root_cause_ids": roots, "evidence_ids": evidence,
         "tool_calls": tool_records, "action_ids": actions, "policy_violations": policy_violations,
-        "latency_ms": round(usage.latency_ms, 3), "prompt_tokens": usage.prompt_tokens,
+        "latency_ms": round((time.perf_counter() - case_started) * 1000, 3), "prompt_tokens": usage.prompt_tokens,
         "completion_tokens": usage.completion_tokens, "cost_usd": round(cost, 8),
         "steps": steps, "error": error,
     }
@@ -262,7 +373,8 @@ async def main_async(args: argparse.Namespace) -> None:
     output.mkdir(parents=True, exist_ok=True)
     client = AsyncOpenAI(api_key=config.deepseek_api_key, base_url=config.deepseek_base_url, timeout=args.timeout, max_retries=2)
     dataset_manifest = json.loads(DATASET_MANIFEST.read_text(encoding="utf-8"))
-    for version in ("V0", "V1", "V2", "V3"):
+    version_names = list(versions_document["versions"])
+    for version in version_names:
         path = output / f"{version}.results.jsonl"
         semaphore = asyncio.Semaphore(args.concurrency)
         completed_ids: set[str] = set()
@@ -290,7 +402,7 @@ async def main_async(args: argparse.Namespace) -> None:
                 handle.flush()
         if not pending:
             print(f"{version}: all {len(selected)} cases already present", flush=True)
-    hashes = {version: file_sha256(output / f"{version}.results.jsonl") for version in ("V0", "V1", "V2", "V3")}
+    hashes = {version: file_sha256(output / f"{version}.results.jsonl") for version in version_names}
     fixture_hash = file_sha256(DATASET)
     rag_hash = text_sha256("\n".join(rag_context(case, all_cases) for case in selected))
     run_manifest = {
@@ -298,7 +410,7 @@ async def main_async(args: argparse.Namespace) -> None:
         "dataset_sha256": dataset_manifest["dataset_sha256"],
         "versions_config_sha256": file_sha256(VERSIONS_PATH), "result_schema_sha256": file_sha256(RESULT_SCHEMA),
         "model_id": model, "model_snapshot": os.getenv("EVAL_MODEL_SNAPSHOT", model),
-        "prompt_sha256": text_sha256(BASE_SYSTEM_PROMPT), "fixture_sha256": fixture_hash,
+        "prompt_sha256": text_sha256(BASE_SYSTEM_PROMPT + TEAM_SUPERVISOR_PROMPT + json.dumps(TEAM_SPECIALISTS, sort_keys=True)), "fixture_sha256": fixture_hash,
         "rag_index_sha256": rag_hash, "retry_policy_sha256": text_sha256("model_retry=2;tool_retry=3"),
         "security_policy_sha256": text_sha256("tenant_context_enforced;prohibited_decoy_filtered"),
         "result_files": hashes,

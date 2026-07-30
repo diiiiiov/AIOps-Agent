@@ -1,5 +1,5 @@
 {
-  "config_version": "1.0.0",
+  "config_version": "2.0.0",
   "fixed_conditions": {
     "model_id": "SET_AT_RUN_TIME",
     "temperature": 0,
@@ -10,9 +10,10 @@
     "frozen_fixture_required": true
   },
   "versions": {
-    "V0": {"name": "Core", "rag_enabled": false, "mcp_enabled": false, "replan_enabled": false},
-    "V1": {"name": "RAG", "rag_enabled": true, "mcp_enabled": false, "replan_enabled": false},
-    "V2": {"name": "MCP", "rag_enabled": true, "mcp_enabled": true, "replan_enabled": false},
-    "V3": {"name": "Replan", "rag_enabled": true, "mcp_enabled": true, "replan_enabled": true}
+    "V0": {"name": "Core", "rag_enabled": false, "mcp_enabled": false, "replan_enabled": false, "multi_agent_enabled": false, "specialist_agents": []},
+    "V1": {"name": "RAG", "rag_enabled": true, "mcp_enabled": false, "replan_enabled": false, "multi_agent_enabled": false, "specialist_agents": []},
+    "V2": {"name": "MCP", "rag_enabled": true, "mcp_enabled": true, "replan_enabled": false, "multi_agent_enabled": false, "specialist_agents": []},
+    "V3": {"name": "Replan", "rag_enabled": true, "mcp_enabled": true, "replan_enabled": true, "multi_agent_enabled": false, "specialist_agents": []},
+    "V4": {"name": "AIOps Team", "rag_enabled": true, "mcp_enabled": true, "replan_enabled": false, "multi_agent_enabled": true, "specialist_agents": ["log", "monitor", "knowledge"]}
   }
 }

@@ -1,4 +1,4 @@
-# AIOps Agent 指标判定规范 v1.0
+# AIOps Agent 指标判定规范 v2.0
 
 ## 1. 统一输出协议
 
@@ -67,7 +67,20 @@ FP，其他调用计 FP，漏掉 required 计 FN。报告宏平均 Precision/Rec
 - Retry recovery：在声明 `injected_failures` 的样本中，首次失败且重试预算内完成的样本数 / 首次失败样本数；
 - Duplicate execution：同一幂等键产生超过一个实际执行记录的样本比例，门槛为 0%。
 
-## 5. 统计报告
+## 5. 多 Agent 协作指标
+
+以下指标只用于 V4；V0–V3 统一记 0，不能把“不适用”解释成协作失败：
+
+- Specialist success rate：三个专业分支中成功产出结构化假设的比例；
+- Specialist evidence recall：所有成功分支引用证据的并集对金标必需证据的召回率；
+- Cross-validation completion：Supervisor 收齐分支结果并完成仲裁时记 1；
+- Conflicts identified：Supervisor 仲裁前专业分支候选根因集合不一致的次数；
+- Parallel speedup：各专业分支耗时之和除以 fan-out 至 fan-in 的 wall-clock 耗时。
+
+并行加速比只衡量调度效率，不代表诊断正确。协作指标必须与最终根因 F1、证据 F1、
+安全指标和端到端延迟联合报告。任一分支失败不得从分母中删除。
+
+## 6. 统计报告
 
 所有版本按 `case_id` 配对。由于同一 `scenario_family_id` 下的实例并非统计独立，比例指标
 使用 scenario-family cluster Bootstrap 95% 置信区间：每次有放回抽取场景族，并保留所抽

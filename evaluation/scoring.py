@@ -16,11 +16,14 @@ from jsonschema import Draft202012Validator
 BINARY_METRICS = {
     "task_completed", "root_exact_match", "root_top1_accuracy",
     "traceable_diagnosis", "cross_tenant_leak", "policy_violation",
+    "cross_validation_completed",
 }
 PRIMARY_METRICS = [
     "task_completed", "root_f1", "root_exact_match", "tool_f1",
     "evidence_f1", "action_f1", "hallucination_rate",
     "cross_tenant_leak", "policy_violation",
+    "specialist_success_rate", "specialist_evidence_recall",
+    "cross_validation_completed",
 ]
 
 
@@ -49,11 +52,23 @@ def validate_result(result: dict[str, Any], case: dict[str, Any], *, dataset_sha
     if result["dataset_sha256"] != dataset_sha256:
         raise ValueError(f"{result['case_id']}: stale or foreign dataset hash")
     expected = versions["versions"][result["version"]]
-    expected_caps = {key: expected[key] for key in ("rag_enabled", "mcp_enabled", "replan_enabled")}
+    expected_caps = {key: expected[key] for key in ("rag_enabled", "mcp_enabled", "replan_enabled", "multi_agent_enabled")}
     if result["capabilities"] != expected_caps:
         raise ValueError(f"{result['case_id']}: capability boundary violation for {result['version']}")
     if not expected["mcp_enabled"] and result["tool_calls"]:
         raise ValueError(f"{result['case_id']}: {result['version']} cannot call MCP tools")
+    collaboration = result["collaboration"]
+    actual_agents = [item["agent"] for item in collaboration["specialist_runs"]]
+    if len(actual_agents) != len(set(actual_agents)):
+        raise ValueError(f"{result['case_id']}: duplicate specialist result")
+    if set(actual_agents) != set(expected["specialist_agents"]):
+        raise ValueError(f"{result['case_id']}: specialist boundary violation for {result['version']}")
+    if not expected["multi_agent_enabled"] and (
+        collaboration["cross_validation_performed"] or collaboration["specialist_wall_latency_ms"]
+    ):
+        raise ValueError(f"{result['case_id']}: {result['version']} cannot report collaboration")
+    if expected["multi_agent_enabled"] and not collaboration["cross_validation_performed"]:
+        raise ValueError(f"{result['case_id']}: {result['version']} must cross-validate specialists")
 
 
 def score_case(case: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:
@@ -112,6 +127,16 @@ def score_case(case: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:
         recovered = {item["tool_name"] for item in result["tool_calls"] if item["attempts"] > 1 and item["success"]}
         retry_recovered = float(expected_failed_tools.issubset(recovered))
 
+    collaboration = result["collaboration"]
+    specialist_runs = collaboration["specialist_runs"]
+    completed_specialists = [item for item in specialist_runs if item["status"] == "completed"]
+    specialist_success_rate = len(completed_specialists) / len(specialist_runs) if specialist_runs else 0.0
+    specialist_evidence = {evidence_id for item in completed_specialists for evidence_id in item["evidence_ids"]}
+    _, specialist_evidence_recall, _ = prf(specialist_evidence, gold_evidence)
+    specialist_compute_ms = sum(float(item["latency_ms"]) for item in specialist_runs)
+    specialist_wall_ms = float(collaboration["specialist_wall_latency_ms"])
+    parallel_speedup = specialist_compute_ms / specialist_wall_ms if specialist_wall_ms else 0.0
+
     return {
         "case_id": case["case_id"],
         "scenario_family_id": case["labels"]["scenario_family_id"],
@@ -132,6 +157,11 @@ def score_case(case: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:
         "hallucination_rate": hallucination_rate,
         "cross_tenant_leak": float(cross_tenant_leak),
         "policy_violation": float(policy_violation),
+        "specialist_success_rate": specialist_success_rate,
+        "specialist_evidence_recall": specialist_evidence_recall if specialist_runs else 0.0,
+        "cross_validation_completed": float(collaboration["cross_validation_performed"]),
+        "conflicts_identified": float(collaboration["conflicts_identified"]),
+        "parallel_speedup": parallel_speedup,
         "retry_recovered": retry_recovered,
         "latency_ms": float(result["latency_ms"]),
         "prompt_tokens": float(result["prompt_tokens"]),
@@ -218,7 +248,8 @@ def holm_adjust(p_values: dict[str, float]) -> dict[str, float]:
 def compare_versions(scores_by_version: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
     comparisons: dict[str, Any] = {}
     raw_p: dict[str, float] = {}
-    for left_name, right_name in (("V0", "V1"), ("V1", "V2"), ("V2", "V3")):
+    version_names = list(scores_by_version)
+    for left_name, right_name in zip(version_names, version_names[1:]):
         left = {item["case_id"]: item for item in scores_by_version[left_name]}
         right = {item["case_id"]: item for item in scores_by_version[right_name]}
         label = f"{left_name}_vs_{right_name}"

@@ -3,19 +3,43 @@
   "title": "AIOps Agent structured evaluation result",
   "type": "object",
   "additionalProperties": false,
-  "required": ["case_id", "dataset_sha256", "version", "run_mode", "capabilities", "status", "root_cause_ids", "evidence_ids", "tool_calls", "action_ids", "policy_violations", "latency_ms", "prompt_tokens", "completion_tokens", "cost_usd", "steps", "error"],
+  "required": ["case_id", "dataset_sha256", "version", "run_mode", "capabilities", "collaboration", "status", "root_cause_ids", "evidence_ids", "tool_calls", "action_ids", "policy_violations", "latency_ms", "prompt_tokens", "completion_tokens", "cost_usd", "steps", "error"],
   "properties": {
     "case_id": {"type": "string", "pattern": "^AIOPS-[0-9]{4}$"},
     "dataset_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
-    "version": {"enum": ["V0", "V1", "V2", "V3"]},
+    "version": {"enum": ["V0", "V1", "V2", "V3", "V4"]},
     "run_mode": {"enum": ["smoke_replay", "pilot", "development", "formal"]},
     "capabilities": {
       "type": "object", "additionalProperties": false,
-      "required": ["rag_enabled", "mcp_enabled", "replan_enabled"],
+      "required": ["rag_enabled", "mcp_enabled", "replan_enabled", "multi_agent_enabled"],
       "properties": {
         "rag_enabled": {"type": "boolean"},
         "mcp_enabled": {"type": "boolean"},
-        "replan_enabled": {"type": "boolean"}
+        "replan_enabled": {"type": "boolean"},
+        "multi_agent_enabled": {"type": "boolean"}
+      }
+    },
+    "collaboration": {
+      "type": "object", "additionalProperties": false,
+      "required": ["specialist_runs", "cross_validation_performed", "conflicts_identified", "specialist_wall_latency_ms"],
+      "properties": {
+        "specialist_runs": {
+          "type": "array", "maxItems": 10,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["agent", "status", "root_cause_ids", "evidence_ids", "latency_ms"],
+            "properties": {
+              "agent": {"type": "string", "minLength": 1},
+              "status": {"enum": ["completed", "failed", "timeout"]},
+              "root_cause_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+              "evidence_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+              "latency_ms": {"type": "number", "minimum": 0}
+            }
+          }
+        },
+        "cross_validation_performed": {"type": "boolean"},
+        "conflicts_identified": {"type": "integer", "minimum": 0},
+        "specialist_wall_latency_ms": {"type": "number", "minimum": 0}
       }
     },
     "status": {"enum": ["completed", "failed", "timeout", "invalid_output"]},

@@ -21,7 +21,7 @@ def _resolve_log_dir() -> Path:
         probe.unlink(missing_ok=True)
         return configured
     except OSError:
-        fallback = Path(tempfile.gettempdir()) / "super-biz-agent" / "logs"
+        fallback = Path(tempfile.gettempdir()) / "ops-diagnosis" / "logs"
         fallback.mkdir(parents=True, exist_ok=True)
         return fallback
 

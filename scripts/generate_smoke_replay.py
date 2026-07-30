@@ -76,7 +76,7 @@ def make_result(case: dict, version: str, config: dict, dataset_sha256: str) -> 
         tools = []
         for name in case["oracle"]["required_tools"]:
             injected = any(item["tool"] == name for item in case["constraints"]["injected_failures"])
-            attempts = 2 if injected and (version == "V3" or serial % 7) else 1
+            attempts = 2 if injected and (version in {"V3", "V4"} or serial % 7) else 1
             tools.append({
                 "tool_name": name,
                 "tenant_id": case["tenant_context"]["request_tenant_id"],
@@ -85,13 +85,40 @@ def make_result(case: dict, version: str, config: dict, dataset_sha256: str) -> 
                 "approved": True,
             })
         failed = version == "V2" and serial % 100 == 0
-    factor = {"V0": 1.0, "V1": 1.25, "V2": 1.7, "V3": 2.0}[version]
+    factor = {"V0": 1.0, "V1": 1.25, "V2": 1.7, "V3": 2.0, "V4": 2.4}[version]
+    specialist_runs = []
+    if config["multi_agent_enabled"]:
+        domains = {
+            "log": {"log", "change", "topology"},
+            "monitor": {"alert", "metric"},
+            "knowledge": {"knowledge"},
+        }
+        observations = {item["evidence_id"]: item for item in case["observations"]}
+        for index, agent in enumerate(config["specialist_agents"]):
+            agent_evidence = [
+                evidence_id for evidence_id in evidence
+                if observations[evidence_id]["source"] in domains[agent]
+            ]
+            specialist_runs.append({
+                "agent": agent,
+                "status": "completed",
+                "root_cause_ids": roots if agent_evidence else [],
+                "evidence_ids": agent_evidence,
+                "latency_ms": float(95 + (serial + index * 11) % 41),
+            })
+    specialist_wall_latency_ms = max((item["latency_ms"] for item in specialist_runs), default=0.0)
     return {
         "case_id": case["case_id"],
         "dataset_sha256": dataset_sha256,
         "version": version,
         "run_mode": "smoke_replay",
-        "capabilities": {key: config[key] for key in ("rag_enabled", "mcp_enabled", "replan_enabled")},
+        "capabilities": {key: config[key] for key in ("rag_enabled", "mcp_enabled", "replan_enabled", "multi_agent_enabled")},
+        "collaboration": {
+            "specialist_runs": specialist_runs,
+            "cross_validation_performed": bool(specialist_runs),
+            "conflicts_identified": 0,
+            "specialist_wall_latency_ms": specialist_wall_latency_ms,
+        },
         "status": "failed" if failed else "completed",
         "root_cause_ids": predicted_roots,
         "evidence_ids": predicted_evidence,
@@ -102,7 +129,7 @@ def make_result(case: dict, version: str, config: dict, dataset_sha256: str) -> 
         "prompt_tokens": int((450 + serial % 120) * factor),
         "completion_tokens": int((120 + serial % 50) * factor),
         "cost_usd": round((0.0002 + (serial % 30) / 100000) * factor, 7),
-        "steps": {"V0": 2, "V1": 2, "V2": 4, "V3": 5}[version],
+        "steps": {"V0": 2, "V1": 2, "V2": 4, "V3": 5, "V4": 3}[version],
         "error": "synthetic_failure" if failed else None,
     }
 

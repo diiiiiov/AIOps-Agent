@@ -12,6 +12,17 @@ Dataset SHA-256: `3b05177b805bc0a8d4200e3adeabfb0c5eed4c320488ef646857877e77fb37
 | V1 | 0.980 | 0.809 | 0.000 | 0.900 | 0.617 | 0.000 | 143.8 |
 | V2 | 0.990 | 0.986 | 1.000 | 1.000 | 1.000 | 0.000 | 195.5 |
 | V3 | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | 0.000 | 230.0 |
+| V4 | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | 0.000 | 276.0 |
+
+## Collaboration (V4 Team)
+
+| Version | Specialist success | Specialist evidence recall | Cross-validation | Parallel speedup |
+|---|---:|---:|---:|---:|
+| V0 | 0.000 | 0.000 | 0.000 | 0.00x |
+| V1 | 0.000 | 0.000 | 0.000 | 0.00x |
+| V2 | 0.000 | 0.000 | 0.000 | 0.00x |
+| V3 | 0.000 | 0.000 | 0.000 | 0.00x |
+| V4 | 1.000 | 1.000 | 1.000 | 2.69x |
 
 ## Adjacent-version cluster-bootstrap differences
 
@@ -26,6 +37,9 @@ Dataset SHA-256: `3b05177b805bc0a8d4200e3adeabfb0c5eed4c320488ef646857877e77fb37
 | V0_vs_V1 | hallucination_rate | -0.8000 | [-0.8235, -0.7761] |
 | V0_vs_V1 | cross_tenant_leak | 0.0000 | [0.0000, 0.0000] |
 | V0_vs_V1 | policy_violation | 0.0000 | [0.0000, 0.0000] |
+| V0_vs_V1 | specialist_success_rate | 0.0000 | [0.0000, 0.0000] |
+| V0_vs_V1 | specialist_evidence_recall | 0.0000 | [0.0000, 0.0000] |
+| V0_vs_V1 | cross_validation_completed | 0.0000 | [0.0000, 0.0000] |
 | V1_vs_V2 | task_completed | 0.0100 | [0.0040, 0.0163] |
 | V1_vs_V2 | root_f1 | 0.1767 | [0.1595, 0.1949] |
 | V1_vs_V2 | root_exact_match | 0.3300 | [0.3029, 0.3581] |
@@ -35,6 +49,9 @@ Dataset SHA-256: `3b05177b805bc0a8d4200e3adeabfb0c5eed4c320488ef646857877e77fb37
 | V1_vs_V2 | hallucination_rate | 0.0000 | [0.0000, 0.0000] |
 | V1_vs_V2 | cross_tenant_leak | 0.0000 | [0.0000, 0.0000] |
 | V1_vs_V2 | policy_violation | 0.0000 | [0.0000, 0.0000] |
+| V1_vs_V2 | specialist_success_rate | 0.0000 | [0.0000, 0.0000] |
+| V1_vs_V2 | specialist_evidence_recall | 0.0000 | [0.0000, 0.0000] |
+| V1_vs_V2 | cross_validation_completed | 0.0000 | [0.0000, 0.0000] |
 | V2_vs_V3 | task_completed | 0.0100 | [0.0049, 0.0164] |
 | V2_vs_V3 | root_f1 | 0.0140 | [0.0102, 0.0180] |
 | V2_vs_V3 | root_exact_match | 0.0420 | [0.0306, 0.0541] |
@@ -44,3 +61,18 @@ Dataset SHA-256: `3b05177b805bc0a8d4200e3adeabfb0c5eed4c320488ef646857877e77fb37
 | V2_vs_V3 | hallucination_rate | 0.0000 | [0.0000, 0.0000] |
 | V2_vs_V3 | cross_tenant_leak | 0.0000 | [0.0000, 0.0000] |
 | V2_vs_V3 | policy_violation | 0.0000 | [0.0000, 0.0000] |
+| V2_vs_V3 | specialist_success_rate | 0.0000 | [0.0000, 0.0000] |
+| V2_vs_V3 | specialist_evidence_recall | 0.0000 | [0.0000, 0.0000] |
+| V2_vs_V3 | cross_validation_completed | 0.0000 | [0.0000, 0.0000] |
+| V3_vs_V4 | task_completed | 0.0000 | [0.0000, 0.0000] |
+| V3_vs_V4 | root_f1 | 0.0000 | [0.0000, 0.0000] |
+| V3_vs_V4 | root_exact_match | 0.0000 | [0.0000, 0.0000] |
+| V3_vs_V4 | tool_f1 | 0.0000 | [0.0000, 0.0000] |
+| V3_vs_V4 | evidence_f1 | 0.0000 | [0.0000, 0.0000] |
+| V3_vs_V4 | action_f1 | 0.0000 | [0.0000, 0.0000] |
+| V3_vs_V4 | hallucination_rate | 0.0000 | [0.0000, 0.0000] |
+| V3_vs_V4 | cross_tenant_leak | 0.0000 | [0.0000, 0.0000] |
+| V3_vs_V4 | policy_violation | 0.0000 | [0.0000, 0.0000] |
+| V3_vs_V4 | specialist_success_rate | 1.0000 | [1.0000, 1.0000] |
+| V3_vs_V4 | specialist_evidence_recall | 1.0000 | [1.0000, 1.0000] |
+| V3_vs_V4 | cross_validation_completed | 1.0000 | [1.0000, 1.0000] |
