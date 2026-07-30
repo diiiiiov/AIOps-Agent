@@ -3,25 +3,25 @@ Planner 节点：制定执行计划
 基于 LangGraph 官方教程实现
 """
 
-from typing import Dict, Any, List
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
-from pydantic import BaseModel, Field
-from loguru import logger
+from textwrap import dedent
 
-from app.config import config
-from app.tools import get_current_time, retrieve_knowledge
+from langchain_core.prompts import ChatPromptTemplate
+from loguru import logger
+from pydantic import BaseModel, Field
+
 from app.agent.mcp_client import get_mcp_client_with_retry
 from app.agent.skill_loader import load_prompt
+from app.core.model_router import model_router
+from app.core.tool_policy import filter_tools
+from app.tools import get_current_time, retrieve_knowledge
+
 from .state import PlanExecuteState
 from .utils import format_tools_description
-from app.core.tool_policy import filter_tools
-from app.core.model_router import model_router
 
 
 class Plan(BaseModel):
     """计划的输出格式"""
-    steps: List[str] = Field(
+    steps: list[str] = Field(
         description="完成任务所需的不同步骤。这些步骤应该按顺序执行，每一步都建立在前一步的基础上。"
     )
 
@@ -35,7 +35,7 @@ planner_prompt = ChatPromptTemplate.from_messages(
 )
 
 
-async def planner(state: PlanExecuteState) -> Dict[str, Any]:
+async def planner(state: PlanExecuteState) -> dict[str, object]:
     """
     规划节点：根据用户输入生成执行计划
 

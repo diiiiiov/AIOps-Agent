@@ -1,6 +1,8 @@
 import asyncio
 from types import SimpleNamespace
 
+from langchain_core.messages import AIMessage, ToolMessage
+
 from app.agent.aiops import team
 from app.services import aiops_service as service_module
 
@@ -105,3 +107,184 @@ def test_agent_models_can_be_configured_independently(monkeypatch):
 
     assert team.model_name_for("log") == "fast-model"
     assert team.model_name_for("monitor") == "default-model"
+
+
+class _FakeBoundModel:
+    def __init__(self, responses):
+        self.responses = list(responses)
+
+    async def ainvoke(self, messages):
+        return self.responses.pop(0)
+
+
+class _FakeStructuredModel:
+    def __init__(self, parsed):
+        self.parsed = parsed
+
+    async def ainvoke(self, messages):
+        return {
+            "raw": AIMessage(
+                content="structured",
+                usage_metadata={"input_tokens": 2, "output_tokens": 3, "total_tokens": 5},
+            ),
+            "parsed": self.parsed,
+            "parsing_error": None,
+        }
+
+
+class _FakeModel:
+    def __init__(self, responses, parsed):
+        self.bound = _FakeBoundModel(responses)
+        self.parsed = parsed
+
+    def bind_tools(self, tools):
+        return self.bound
+
+    def with_structured_output(self, schema, include_raw=False):
+        assert include_raw is True
+        return _FakeStructuredModel(self.parsed)
+
+
+def _hypothesis():
+    return team.SpecialistHypothesis(
+        hypothesis="database saturation",
+        confidence=0.8,
+        evidence=["latency and errors aligned"],
+        counter_evidence=[],
+        recommended_actions=["verify pool usage"],
+    )
+
+
+async def test_specialist_runs_multi_turn_react_and_records_outcome(monkeypatch):
+    model = _FakeModel(
+        [
+            AIMessage(
+                content="",
+                tool_calls=[{"name": "search_log", "args": {"query": "timeout"}, "id": "call-1"}],
+            ),
+            AIMessage(content="evidence is sufficient"),
+        ],
+        _hypothesis(),
+    )
+
+    async def fake_tools(agent):
+        return [SimpleNamespace(name="search_log")]
+
+    async def fake_execute(calls, tools):
+        return [
+            ToolMessage(
+                content="timeout count=12",
+                tool_call_id=calls[0]["id"],
+                response_metadata={"status": "success", "duration_ms": 4.5},
+            )
+        ]
+
+    usage_messages = []
+    monkeypatch.setattr(team, "tools_for_agent", fake_tools)
+    monkeypatch.setattr(team.model_router, "create", lambda **kwargs: model)
+    monkeypatch.setattr(team.tool_gateway, "execute_calls", fake_execute)
+    monkeypatch.setattr(team, "record_message_usage", lambda message, model_name: usage_messages.append(message))
+
+    update = await team.specialist(
+        {"assignment": {"agent": "log", "task": "investigate timeout"}}
+    )
+    result = update["agent_results"][0]
+
+    assert result["status"] == "completed"
+    assert result["iterations"] == 2
+    assert result["termination_reason"] == "model_finished"
+    assert result["tool_calls"][0]["status"] == "success"
+    assert result["tool_calls"][0]["duration_ms"] == 4.5
+    assert len(usage_messages) == 3  # two ReAct turns plus final structured output
+
+
+async def test_specialist_blocks_repeated_tool_calls(monkeypatch):
+    repeated = {"name": "search_log", "args": {"query": "same"}}
+    model = _FakeModel(
+        [
+            AIMessage(content="", tool_calls=[{**repeated, "id": "call-1"}]),
+            AIMessage(content="", tool_calls=[{**repeated, "id": "call-2"}]),
+        ],
+        _hypothesis(),
+    )
+    executed = []
+
+    async def fake_tools(agent):
+        return [SimpleNamespace(name="search_log")]
+
+    async def fake_execute(calls, tools):
+        executed.extend(calls)
+        return [
+            ToolMessage(
+                content="same result",
+                tool_call_id=call["id"],
+                response_metadata={"status": "success", "duration_ms": 1.0},
+            )
+            for call in calls
+        ]
+
+    monkeypatch.setattr(team.config, "aiops_specialist_repeat_call_limit", 1)
+    monkeypatch.setattr(team, "tools_for_agent", fake_tools)
+    monkeypatch.setattr(team.model_router, "create", lambda **kwargs: model)
+    monkeypatch.setattr(team.tool_gateway, "execute_calls", fake_execute)
+    monkeypatch.setattr(team, "record_message_usage", lambda *args: None)
+
+    update = await team.specialist(
+        {"assignment": {"agent": "log", "task": "investigate timeout"}}
+    )
+    result = update["agent_results"][0]
+
+    assert len(executed) == 1
+    assert result["termination_reason"] == "repeated_tool_call"
+    assert [item["status"] for item in result["tool_calls"]] == [
+        "success",
+        "duplicate_blocked",
+    ]
+
+
+async def test_specialist_enforces_total_tool_call_budget(monkeypatch):
+    model = _FakeModel(
+        [
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {"name": "search_log", "args": {"query": "one"}, "id": "call-1"},
+                    {"name": "search_log", "args": {"query": "two"}, "id": "call-2"},
+                ],
+            )
+        ],
+        _hypothesis(),
+    )
+    executed = []
+
+    async def fake_tools(agent):
+        return [SimpleNamespace(name="search_log")]
+
+    async def fake_execute(calls, tools):
+        executed.extend(calls)
+        return [
+            ToolMessage(
+                content="first result",
+                tool_call_id=call["id"],
+                response_metadata={"status": "success", "duration_ms": 1.0},
+            )
+            for call in calls
+        ]
+
+    monkeypatch.setattr(team.config, "aiops_specialist_max_tool_calls", 1)
+    monkeypatch.setattr(team, "tools_for_agent", fake_tools)
+    monkeypatch.setattr(team.model_router, "create", lambda **kwargs: model)
+    monkeypatch.setattr(team.tool_gateway, "execute_calls", fake_execute)
+    monkeypatch.setattr(team, "record_message_usage", lambda *args: None)
+
+    update = await team.specialist(
+        {"assignment": {"agent": "log", "task": "investigate timeout"}}
+    )
+    result = update["agent_results"][0]
+
+    assert len(executed) == 1
+    assert result["termination_reason"] == "max_tool_calls"
+    assert [item["status"] for item in result["tool_calls"]] == [
+        "success",
+        "budget_exhausted",
+    ]

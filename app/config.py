@@ -3,9 +3,18 @@
 使用 Pydantic Settings 实现类型安全的配置管理
 """
 
-from typing import Dict, Any
 import json
+from importlib.metadata import PackageNotFoundError, version
+
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _installed_version() -> str:
+    try:
+        return version("ops-diagnosis")
+    except PackageNotFoundError:
+        return "0.0.0+local"
 
 
 class Settings(BaseSettings):
@@ -20,7 +29,7 @@ class Settings(BaseSettings):
 
     # 应用配置
     app_name: str = "OpsDiagnosis"
-    app_version: str = "1.0.0"
+    app_version: str = Field(default_factory=_installed_version)
     debug: bool = False
     host: str = "0.0.0.0"
     port: int = 9900
@@ -95,7 +104,9 @@ class Settings(BaseSettings):
     aiops_knowledge_model: str = ""
     aiops_supervisor_model: str = ""
     # ReAct 多轮工具调用最大迭代次数（全局默认值，可在 agent YAML 中按 agent 覆盖）
-    aiops_specialist_max_iterations: int = 5
+    aiops_specialist_max_iterations: int = Field(default=5, ge=1, le=20)
+    aiops_specialist_max_tool_calls: int = Field(default=12, ge=1, le=100)
+    aiops_specialist_repeat_call_limit: int = Field(default=2, ge=1, le=10)
 
     # 文档分块配置
     chunk_max_size: int = 800
@@ -108,7 +119,7 @@ class Settings(BaseSettings):
     mcp_monitor_url: str = "http://localhost:8004/mcp"
 
     @property
-    def mcp_servers(self) -> Dict[str, Dict[str, Any]]:
+    def mcp_servers(self) -> dict[str, dict[str, object]]:
         """获取完整的 MCP 服务器配置"""
         return {
             "cls": {

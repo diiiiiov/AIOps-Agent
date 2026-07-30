@@ -1,14 +1,14 @@
 """文件上传接口模块"""
 
-from pathlib import Path
 import re
+from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
-
-from app.services.vector_index_service import vector_index_service
 from loguru import logger
+
 from app.core.request_context import get_request_context
+from app.services.vector_index_service import vector_index_service
 
 router = APIRouter()
 
@@ -65,11 +65,6 @@ async def upload_file(
         # 5. 保存文件
         file_path = tenant_upload_dir / safe_filename
 
-        # 如果文件已存在，先删除旧文件（实现覆盖更新）
-        if file_path.exists():
-            logger.info(f"文件已存在，将覆盖: {file_path}")
-            file_path.unlink()
-
         # 读取并保存文件内容
         content = await file.read()
 
@@ -77,6 +72,8 @@ async def upload_file(
         if len(content) > MAX_FILE_SIZE:
             raise HTTPException(status_code=400, detail=f"文件大小超过限制（最大 {MAX_FILE_SIZE} 字节）")
 
+        if file_path.exists():
+            logger.info(f"文件已存在，将覆盖: {file_path}")
         file_path.write_bytes(content)
 
         logger.info(f"文件上传成功: {file_path}")
@@ -119,7 +116,7 @@ async def upload_file(
         raise
     except Exception as e:
         logger.error(f"文件上传失败: {e}")
-        raise HTTPException(status_code=500, detail=f"文件上传失败: {e}")
+        raise HTTPException(status_code=500, detail=f"文件上传失败: {e}") from e
 
 
 @router.post("/index_directory")
@@ -131,12 +128,12 @@ async def index_directory():
         JSONResponse: 索引结果
     """
     try:
-        logger.info(f"开始索引目录: {directory_path or 'uploads'}")
-
-        # 执行索引
         context = get_request_context()
         safe_tenant_id = re.sub(r"[^A-Za-z0-9_-]", "_", context.tenant_id)[:100] or "public"
         tenant_directory = UPLOAD_DIR / safe_tenant_id
+        logger.info(f"开始索引目录: {tenant_directory}")
+
+        # 执行索引
         result = vector_index_service.index_directory(
             str(tenant_directory), tenant_id=context.tenant_id
         )
@@ -152,7 +149,7 @@ async def index_directory():
 
     except Exception as e:
         logger.error(f"索引目录失败: {e}")
-        raise HTTPException(status_code=500, detail=f"索引目录失败: {e}")
+        raise HTTPException(status_code=500, detail=f"索引目录失败: {e}") from e
 
 
 def _get_file_extension(filename: str) -> str:

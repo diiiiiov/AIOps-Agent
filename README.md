@@ -1,25 +1,28 @@
 # OpsDiagnosis
 
-> OpsDiagnosis - 企业级智能运维诊断系统，支持 RAG 知识库问答和 AIOps 智能故障诊断
+> OpsDiagnosis - 企业级智能运维诊断系统，支持 RAG、MCP 工具调用和 V4 多 Agent 智能故障诊断
 
-[![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-green.svg)](https://fastapi.tiangolo.com/)
-[![LangChain](https://img.shields.io/badge/LangChain-latest-orange.svg)](https://www.langchain.com/)
+[![Version](https://img.shields.io/badge/version-1.2.1-blue.svg)](pyproject.toml)
+[![Python](https://img.shields.io/badge/Python-3.11--3.13-blue.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.141%2B-green.svg)](https://fastapi.tiangolo.com/)
+[![LangChain](https://img.shields.io/badge/LangChain-1.x-orange.svg)](https://www.langchain.com/)
 
 ## ✨ 核心特性
 
-- 🤖 **智能对话** - LangChain 多轮对话 + 流式输出
+- 🤖 **智能对话** - LangChain 多轮对话、流式输出和运行时模型路由
 - 📚 **RAG 问答** - 向量检索增强，支持文档上传、自动建立向量索引、自动更新知识库
-- 🔧 **AIOps 诊断** - Supervisor + 并行专业 Agent 自动故障诊断和交叉验证
+- 🔧 **AIOps 诊断** - Supervisor + 并行专业 Agent，支持有界多轮 ReAct、证据仲裁和交叉验证
 - 🌐 **Web 界面** - 现代化 UI，支持多种对话模式：快速问答/流式对话
-- 🔌 **MCP 集成** - 日志查询和监控数据工具接入
+- 🔌 **MCP 集成** - 日志、监控工具接入，包含租户隔离、审批、重试、审计和调用预算
 
 ## 🛠️ 技术栈
 
 - **框架**: FastAPI + LangChain + LangGraph
-- **LLM**: 阿里云 DashScope (通义千问)
-- **向量库**: Milvus
+- **LLM**: OpenAI 兼容接口，默认 DeepSeek；各专业 Agent 与 Supervisor 可独立选模
+- **Embedding**: 硅基流动 OpenAI 兼容接口
+- **向量库**: Milvus 2.6
 - **工具协议**: MCP (Model Context Protocol)
+- **状态存储**: SQLite（默认）或 PostgreSQL
 
 ## 📌 当前版本能力概览
 
@@ -27,13 +30,15 @@
 2. **统一 MCP 工具网关**：接入日志、监控指标和服务拓扑工具，提供参数校验、失败重试、租户权限隔离、人工审批和调用审计，阻断越权访问及高风险未授权操作。
 3. **Milvus RAG 检索**：对运维文档进行切分、向量化和检索，并按租户上下文过滤，为 Agent 提供故障模式、历史案例和处置建议；历史知识不会替代现场证据。
 4. **任务与运行治理**：通过 FastAPI 提供诊断、任务管理和审批接口；任务状态、对话记忆、审批和用量记录支持 SQLite 默认后端，并可切换 PostgreSQL。系统支持任务心跳、优先级、失败重试、并发控制，以及 token、延迟和成本统计。
-5. **新版评估体系**：保留 1000 条、10 类故障的结构化数据集，将评估矩阵从 V0–V3 扩展为 V0–V4；V4 新增多 Agent 分支成功率、专业证据召回、交叉验证完成率和并行加速比。旧版开发集结果（V3 根因 F1 0.973、较 V2 提升 52.4 个百分点）属于历史单 Agent 对比。
+5. **新版评估体系**：保留 1000 条、10 类故障的结构化数据集，将评估矩阵从 V0–V3 扩展为 V0–V4；V4 新增多 Agent 分支成功率、专业证据召回、交叉验证完成率和并行加速比。旧版 V3 开发集结果属于历史单 Agent 对比；2026-07-30 的 5 样例真实模型 Pilot 中，V4 根因 F1/证据 F1 均为 0.933、动作 F1 为 0.960、跨租户泄漏率为 0、并行收益为 2.35×。该 Pilot 仅用于开发验证，不是正式评测结论。
 
 ## 🚀 快速开始
 
 ### 环境要求
-- Python 3.10+
-- 阿里云 DashScope API Key ([获取地址](https://dashscope.aliyun.com/))
+- Python 3.11、3.12 或 3.13
+- Docker / Docker Compose（Milvus 和集成测试需要）
+- DeepSeek API Key（对话与诊断）
+- 硅基流动 API Key（文档向量化）
 
 ### 安装和启动
 
@@ -44,19 +49,14 @@
 git clone <repository_url>
 cd ops_diagnosis
 
-# 2. 安装依赖（推荐使用 uv）
-# 方式 1: 使用 uv（推荐，更快）
+# 2. 使用锁文件创建环境并安装依赖
 pip install uv
-uv venv
+uv sync --frozen --extra dev
 source .venv/bin/activate
-uv pip install -e .
 
-# 方式 2: 使用 pip
-pip install -e .
-
-# 3. 编辑配置文件
-# 首次使用需要编辑 .env 文件，填入你的 DASHSCOPE_API_KEY
-vim .env  # 或使用其他编辑器
+# 3. 创建并编辑配置文件
+cp .env.example .env
+# 至少配置 DEEPSEEK_API_KEY 和 SILICONFLOW_API_KEY
 
 # 4. 一键初始化（启动 Docker + 服务 + 上传文档）
 make init
@@ -74,24 +74,15 @@ make start
 git clone <repository_url>
 cd ops_diagnosis
 
-# 2. 创建虚拟环境并安装依赖
-# 方式 1: 使用 uv（推荐，更快）
+# 2. 使用锁文件创建环境并安装依赖
 pip install uv
-# 创建虚拟环境
-uv venv
-# 激活虚拟环境
+uv sync --frozen --extra dev
 .venv\Scripts\activate
-# 安装所有依赖
-uv pip install -e .
 
-# 方式 2: 使用 pip
-python -m venv .venv
-.venv\Scripts\activate
-pip install -e .
-
-# 3. 编辑配置文件
-# 使用记事本或其他编辑器打开 .env 文件，填入你的 DASHSCOPE_API_KEY
+# 3. 创建并编辑配置文件
+Copy-Item .env.example .env
 notepad .env
+# 至少配置 DEEPSEEK_API_KEY 和 SILICONFLOW_API_KEY
 
 # 4. 启动 Docker Desktop
 # 确保 Docker Desktop 已安装并正在运行
@@ -99,8 +90,8 @@ notepad .env
 # 5. 启动 Milvus 向量数据库（Docker Compose）
 docker compose -f vector-database.yml up -d
 
-# 6. 等待 Milvus 启动完成（约 5-10 秒）
-timeout /t 10
+# 6. 查看 Milvus 状态
+docker compose -f vector-database.yml ps
 
 # 7. 启动 MCP 服务
 # 启动 CLS 日志查询服务（新开一个 PowerShell 窗口）
@@ -113,10 +104,7 @@ python mcp_servers/monitor_server.py
 # 注意：日志会自动输出到 logs\app_YYYY-MM-DD.log
 python -m uvicorn app.main:app --host 0.0.0.0 --port 9900
 
-# 9. 上传文档到向量库（新开一个 PowerShell 窗口）
-# 等待服务启动完成后执行
-timeout /t 5
-python -c "import requests, os, time; [requests.post('http://localhost:9900/api/upload', files={'file': open(f'aiops-docs/{f}', 'rb')}) or time.sleep(1) for f in os.listdir('aiops-docs') if f.endswith('.md')]"
+# 9. 通过 http://localhost:9900/docs 调用 /api/upload 上传知识文档
 ```
 
 **Windows 一键启动脚本**（推荐）
@@ -144,8 +132,11 @@ python -c "import requests, os, time; [requests.post('http://localhost:9900/api/
 | 普通对话 | POST | `/api/chat` | 一次性返回 |
 | 流式对话 | POST | `/api/chat_stream` | SSE 流式输出 |
 | AIOps 诊断 | POST | `/api/aiops` | 自动故障诊断（流式） |
+| 创建诊断任务 | POST | `/api/aiops/tasks` | 创建可查询、取消的异步诊断任务 |
+| 查询诊断任务 | GET | `/api/aiops/tasks/{task_id}` | 获取任务状态、事件和错误信息 |
 | 文件上传 | POST | `/api/upload` | 上传并索引文档 |
-| 健康检查 | GET | `/api/health` | 服务状态检查 |
+| 健康检查 | GET | `/health` | 服务状态检查 |
+| 运行指标 | GET | `/api/metrics` | Token、延迟、成本和任务指标 |
 
 ### 使用示例
 
@@ -164,7 +155,7 @@ curl -X POST "http://localhost:9900/api/chat_stream" \
 # AIOps 诊断
 curl -X POST "http://localhost:9900/api/aiops" \
   -H "Content-Type: application/json" \
-  -d '{"session_id":"session-123"}' \
+  -d '{"session_id":"session-123","context":{"symptom":"支付接口大量超时","service_name":"payment-service","severity":"critical","environment":"prod"}}' \
   --no-buffer
 ```
 
@@ -225,6 +216,13 @@ ops_diagnosis/
 │   ├── monitor_server.py                   # 监控数据服务
 │   └── README.md                           # MCP 服务说明
 ├── aiops-docs/                             # 运维知识库（Markdown 文档）
+├── skills/                                 # Agent 定义与外置 Prompt
+│   ├── agents/                             # 日志、监控、知识 Agent 配置
+│   └── prompts/                            # ReAct、仲裁等 Prompt 模板
+├── evaluation/                             # V0–V4 数据集、Schema、结果与评分逻辑
+├── scripts/                                # 评测和 Docker 集成测试脚本
+├── tests/                                  # 单元测试与集成测试
+├── deploy/Dockerfile                       # 应用生产镜像
 ├── logs/                                   # 日志目录（Loguru 自动创建）
 │   └── app_YYYY-MM-DD.log                  # 按天轮转的日志文件
 ├── uploads/                                # 上传文件临时目录
@@ -245,11 +243,15 @@ ops_diagnosis/
 通过 `.env` 文件配置：
 
 ```bash
-# 阿里云LLM DashScope 配置（必填）
-# 秘钥管理： https://bailian.console.aliyun.com/cn-beijing/?spm=5176.29597918.J_SEsSjsNv72yRuRFS2VknO.2.61ac133ccTVQLw&tab=demohouse#/api-key
-DASHSCOPE_API_KEY=your-api-key （配置你自己的秘钥）
-DASHSCOPE_API_BASE=https://dashscope.aliyuncs.com/compatible-mode/v1  # 不配置则默认会使用新加坡站点
-DASHSCOPE_MODEL=qwen-max
+# 对话与诊断模型
+DEEPSEEK_API_KEY=sk-your-deepseek-api-key
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-chat
+
+# 文档向量化
+SILICONFLOW_API_KEY=sk-your-siliconflow-api-key
+SILICONFLOW_BASE_URL=https://api.siliconflow.cn/v1
+SILICONFLOW_EMBEDDING_MODEL=BAAI/bge-large-zh-v1.5
 
 # Milvus 配置
 MILVUS_HOST=localhost
@@ -259,7 +261,18 @@ MILVUS_PORT=19530
 RAG_TOP_K=3
 CHUNK_MAX_SIZE=800
 CHUNK_OVERLAP=100
+
+# V4 Agent 模型与有界 ReAct
+AIOPS_LOG_MODEL=deepseek-chat
+AIOPS_MONITOR_MODEL=deepseek-chat
+AIOPS_KNOWLEDGE_MODEL=deepseek-chat
+AIOPS_SUPERVISOR_MODEL=deepseek-reasoner
+AIOPS_SPECIALIST_MAX_ITERATIONS=5
+AIOPS_SPECIALIST_MAX_TOOL_CALLS=12
+AIOPS_SPECIALIST_REPEAT_CALL_LIMIT=2
 ```
+
+完整配置、后端切换、安全和预算选项见 [`.env.example`](.env.example)。生产环境应启用认证、替换 `AUTH_SECRET`，并限制 `CORS_ALLOWED_ORIGINS` 与 `LLM_ALLOWED_BASE_URLS`。
 
 ## 🎯 AIOps 智能运维
 
@@ -268,15 +281,16 @@ LangGraph `Send` API 将同一事件并行派发给日志、监控和知识 Agen
 假设后进行交叉验证与最终仲裁。
 
 > 架构说明：Planner–Executor–Replanner 是历史实现和 V0–V3 消融评测基线，
-> 当前主线采用 Supervisor + 并行专业 Agent。旧版评测报告中的 V3 数值（根因
-> F1 0.973、相对 V2 提升 52.4 个百分点）仅描述 2026-07-23 的历史实验，
-> 不代表当前 V4 Team 的效果；V4 结果需按新版协作指标重新运行。
+> 当前主线采用 Supervisor + 并行专业 Agent。V4 Pilot 结果见下方“测试与评测”，
+> 小样本开发结果不能替代经过审核的 sealed test 正式评测。
 
 ### 核心特性
 - ✅ `Send` fan-out 并行调查，降低串行等待时间
 - ✅ 日志 / 监控 / 知识 Agent 使用独立工具白名单与专属 Prompt
+- ✅ 有界多轮 ReAct：限制迭代数、总工具调用数和重复调用次数
 - ✅ 每个 Agent 可配置不同模型，Supervisor 可使用强推理模型
-- ✅ 多 Agent 独立提出可证伪假设，Supervisor 按证据权重交叉验证
+- ✅ Supervisor 同时接收专家结论和允许访问的现场证据，按证据质量而非多数票仲裁
+- ✅ 外部 Prompt 启动时校验占位符和路径，工具输出按不可信数据处理
 - ✅ 流式输出诊断过程
 - ✅ 生成结构化报告
 
@@ -311,6 +325,53 @@ AIOPS_KNOWLEDGE_MODEL=deepseek-chat
 AIOPS_SUPERVISOR_MODEL=deepseek-reasoner
 ```
 
+## 🧪 测试与评测
+
+### 单元测试与代码质量
+
+```powershell
+# 全量测试；默认生成覆盖率报告并执行 25% 最低门槛
+python -m pytest
+
+# CI 使用的致命错误检查
+python -m ruff check app tests scripts evaluation --select E9,F63,F7,F82
+```
+
+当前工作区验证结果（2026-07-30）：38 个测试通过，3 个 Docker 集成测试在普通单测中按设计跳过，覆盖率 29.52%。CI 在 Python 3.11、3.12、3.13 上运行同一套质量门槛。
+
+### Docker 集成测试
+
+Docker Desktop 启动后，在 PowerShell 执行：
+
+```powershell
+.\scripts\integration-test.ps1
+```
+
+脚本会启动 PostgreSQL、etcd、MinIO、Milvus 以及本地 MCP 测试服务，运行 `tests/test_integration_stack.py`，并在结束后清理容器和测试卷。需要保留环境排查时使用 `-KeepRunning`。
+
+应用镜像可以独立构建：
+
+```powershell
+docker build -f deploy/Dockerfile -t ops-diagnosis:1.2.1 .
+```
+
+### V0–V4 真实模型 Pilot
+
+真实模型评测会产生 API 费用，默认只运行开发集前 5 个样例，并同时生成 V0–V4 对照结果：
+
+```powershell
+python scripts/run_real_model_evaluation.py `
+  --mode pilot `
+  --limit 5 `
+  --model deepseek-chat `
+  --output-dir evaluation/results/my-v4-pilot
+
+python scripts/score_evaluation_results.py `
+  --results-dir evaluation/results/my-v4-pilot
+```
+
+最新开发 Pilot 报告位于 [`evaluation/results/real-pilot-v4-evidence-v3-deepseek-chat-20260730/report.md`](evaluation/results/real-pilot-v4-evidence-v3-deepseek-chat-20260730/report.md)：V4 完成率 1.000、根因 F1 0.933、证据 F1 0.933、动作 F1 0.960、泄漏率 0、专业 Agent 成功率与交叉验证完成率均为 1.000、并行收益 2.35×。该批次只有 5 个开发样例，仅用于回归验证；正式发布数据必须使用审核通过的 sealed test，并遵守 [`docs/evaluation/running.md`](docs/evaluation/running.md) 中的结果契约。
+
 ## 📝 开发指南
 
 ### 常用命令
@@ -333,6 +394,7 @@ make down              # 停止 Docker 容器
 # 代码质量
 make format            # 格式化代码
 make lint              # 代码检查
+make test              # 全量测试与覆盖率
 ```
 
 
@@ -374,9 +436,11 @@ taskkill /F /PID <PID>
 
 ### API Key 错误
 ```bash
-# 检查环境变量
-cat .env | grep DASHSCOPE_API_KEY    # Linux/macOS
-type .env | findstr DASHSCOPE_API_KEY  # Windows
+# Linux/macOS：只检查配置项是否存在，不要把密钥值粘贴到日志或 Issue
+grep -E '^(DEEPSEEK_API_KEY|SILICONFLOW_API_KEY)=' .env
+
+# Windows
+Select-String -Path .env -Pattern '^(DEEPSEEK_API_KEY|SILICONFLOW_API_KEY)='
 ```
 
 ### Milvus 连接失败

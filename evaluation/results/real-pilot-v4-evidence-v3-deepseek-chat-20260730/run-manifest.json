@@ -1,0 +1,21 @@
+{
+  "dataset_sha256": "3b05177b805bc0a8d4200e3adeabfb0c5eed4c320488ef646857877e77fb3768",
+  "fixture_sha256": "3b05177b805bc0a8d4200e3adeabfb0c5eed4c320488ef646857877e77fb3768",
+  "model_id": "deepseek-chat",
+  "model_snapshot": "deepseek-chat",
+  "prompt_sha256": "a1e20717c84f150dee0e3abc18f126f8a798dc7867e5d8d89c661bd9c0fff416",
+  "rag_index_sha256": "bb2f19f0c1bde7e67766b6c97a205ed5bf73d09631ade1de9741de0a2b9717ae",
+  "result_files": {
+    "V0": "286300f5b44ae26576897875f13b20dcbb1e5bb05e49f7488856b08dcd59b739",
+    "V1": "59fa18151e9e9798f87e2c870f82dc961d1604d6e9c8bb49d937ddeb26421868",
+    "V2": "2a0177bacb56ef83d23e647115d19f11302ee5091ca97acb973c204ad54efe76",
+    "V3": "a1d50931d179e372ef85f043f6b73039791ccf50efa9695324f8f99275955b61",
+    "V4": "d5e5c127e2aad9d86d10530d0897fbaf040ab333981b10754fc74564690e6b0a"
+  },
+  "result_schema_sha256": "bf8cf845e236bf931607d8271c737a33de589428de6e0e82445bf7b087b1c02a",
+  "retry_policy_sha256": "7da6ffe7e8ece4bfe2538b246b72f1cc96ef256ed713347c805776ed7f563dd2",
+  "run_id": "real-pilot-deepseek-chat",
+  "run_mode": "pilot",
+  "security_policy_sha256": "34f7207f7e98bbbe5d39886fe01c94ba5161be77cd53a7bee2de7bc60179e7fa",
+  "versions_config_sha256": "86f2559829e39dfb71415da67f8c434cb1a62a445a56f7520a47a14ed1c586a0"
+}

@@ -28,6 +28,7 @@ class AgentResult(TypedDict, total=False):
     # ReAct 多轮工具调用追踪记录
     tool_calls: list[dict[str, Any]]
     iterations: int
+    termination_reason: str
 
 
 class PlanExecuteState(TypedDict, total=False):

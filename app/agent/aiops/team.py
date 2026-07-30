@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langgraph.types import Send
 from loguru import logger
 from pydantic import BaseModel, Field
@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from app.agent.mcp_client import get_mcp_client_with_retry
 from app.agent.skill_loader import load_agent_definitions, load_prompt
 from app.config import config
+from app.core.audit import redact
 from app.core.model_router import model_router
 from app.core.tool_gateway import tool_gateway
 from app.core.tool_policy import filter_tools
@@ -42,6 +43,43 @@ class Arbitration(BaseModel):
     conflicts: list[str] = Field(default_factory=list)
     missing_evidence: list[str] = Field(default_factory=list)
     report: str = Field(description="给用户的 Markdown 诊断报告")
+
+
+def _tool_call_fingerprint(call: dict[str, Any]) -> str:
+    """Return a deterministic identity used to stop repeated tool calls."""
+
+    return json.dumps(
+        {"name": call.get("name", ""), "args": call.get("args", {})},
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+
+
+async def _invoke_structured_with_usage(
+    llm: Any,
+    schema: type[BaseModel],
+    messages: list[Any],
+    model_name: str,
+) -> BaseModel:
+    """Invoke structured output while retaining the raw message for usage accounting."""
+
+    payload = await llm.with_structured_output(schema, include_raw=True).ainvoke(messages)
+    if isinstance(payload, dict) and "parsed" in payload:
+        raw = payload.get("raw")
+        if raw is not None:
+            record_message_usage(raw, model_name)
+        if payload.get("parsing_error") is not None:
+            raise ValueError(f"结构化输出解析失败: {payload['parsing_error']}")
+        parsed = payload.get("parsed")
+        if parsed is None:
+            raise ValueError("结构化输出为空")
+        return parsed
+
+    # Compatibility fallback for model adapters that ignore include_raw.
+    record_message_usage(payload, model_name)
+    return payload
 
 
 def supervisor(state: PlanExecuteState) -> dict[str, Any]:
@@ -125,8 +163,13 @@ async def specialist(state: PlanExecuteState) -> dict[str, Any]:
 
     # 每个 agent 可在 YAML 中覆盖全局默认迭代上限
     max_iterations = definition.get("max_iterations") or config.aiops_specialist_max_iterations
+    max_tool_calls = definition.get("max_tool_calls") or config.aiops_specialist_max_tool_calls
+    repeat_call_limit = config.aiops_specialist_repeat_call_limit
     tool_call_log: list[dict[str, Any]] = []
+    seen_calls: dict[str, int] = {}
     iterations_completed = 0
+    total_tool_calls = 0
+    termination_reason = "no_tools"
 
     try:
         if tools:
@@ -139,6 +182,7 @@ async def specialist(state: PlanExecuteState) -> dict[str, Any]:
 
                 tool_calls = getattr(response, "tool_calls", None)
                 if not tool_calls:
+                    termination_reason = "model_finished"
                     logger.debug(
                         "{} ReAct 迭代 {}/{}: 无工具调用，进入假设生成",
                         definition["label"], iteration, max_iterations,
@@ -151,23 +195,88 @@ async def specialist(state: PlanExecuteState) -> dict[str, Any]:
                     len(tool_calls),
                     ", ".join(tc.get("name", "?") for tc in tool_calls),
                 )
-                tool_messages = await tool_gateway.execute_calls(tool_calls, tools)
-                messages.extend(tool_messages)
+                executable_calls: list[dict[str, Any]] = []
+                blocked_messages: list[ToolMessage] = []
+                blocked_records: list[dict[str, Any]] = []
+                budget_exhausted = False
 
                 for tc in tool_calls:
-                    tool_call_log.append({
+                    call_id = str(tc.get("id") or tc.get("name") or "tool")
+                    base_record = {
                         "iteration": iteration,
                         "tool": tc.get("name", ""),
-                        "args": tc.get("args", {}),
-                    })
+                        "args": redact(tc.get("args", {})),
+                        "call_id": call_id,
+                    }
+                    fingerprint = _tool_call_fingerprint(tc)
+                    previous_count = seen_calls.get(fingerprint, 0)
+
+                    if total_tool_calls >= max_tool_calls:
+                        budget_exhausted = True
+                        blocked_messages.append(
+                            ToolMessage(
+                                content=f"工具调用总预算已用尽（最多 {max_tool_calls} 次）",
+                                tool_call_id=call_id,
+                                response_metadata={"status": "budget_exhausted", "duration_ms": 0.0},
+                            )
+                        )
+                        blocked_records.append({**base_record, "status": "budget_exhausted"})
+                        continue
+
+                    if previous_count >= repeat_call_limit:
+                        blocked_messages.append(
+                            ToolMessage(
+                                content="检测到重复工具调用，已阻止；请基于现有证据形成结论",
+                                tool_call_id=call_id,
+                                response_metadata={"status": "duplicate_blocked", "duration_ms": 0.0},
+                            )
+                        )
+                        blocked_records.append({**base_record, "status": "duplicate_blocked"})
+                        continue
+
+                    seen_calls[fingerprint] = previous_count + 1
+                    total_tool_calls += 1
+                    executable_calls.append(tc)
+
+                tool_messages = (
+                    await tool_gateway.execute_calls(executable_calls, tools)
+                    if executable_calls
+                    else []
+                )
+                messages.extend(tool_messages)
+                messages.extend(blocked_messages)
+
+                for tc, tool_message in zip(executable_calls, tool_messages, strict=True):
+                    metadata = tool_message.response_metadata or {}
+                    tool_call_log.append(
+                        {
+                            "iteration": iteration,
+                            "tool": tc.get("name", ""),
+                            "args": redact(tc.get("args", {})),
+                            "call_id": str(tc.get("id") or tc.get("name") or "tool"),
+                            "status": metadata.get("status", "unknown"),
+                            "duration_ms": metadata.get("duration_ms", 0.0),
+                            "result": redact(tool_message.content, max_length=300),
+                        }
+                    )
+                tool_call_log.extend(blocked_records)
+
+                if budget_exhausted or total_tool_calls >= max_tool_calls:
+                    termination_reason = "max_tool_calls"
+                    break
+                if not executable_calls and blocked_records:
+                    termination_reason = "repeated_tool_call"
+                    break
             else:
+                termination_reason = "max_iterations"
                 logger.warning(
                     "{} 达到最大 ReAct 迭代数 {}，强制进入假设生成",
                     definition["label"], max_iterations,
                 )
 
-        structured_llm = llm.with_structured_output(SpecialistHypothesis)
-        hypothesis = await structured_llm.ainvoke(messages)
+        hypothesis = await _invoke_structured_with_usage(
+            llm, SpecialistHypothesis, messages, model_name
+        )
         result: AgentResult = {
             "agent": agent,
             "task": assignment["task"],
@@ -179,6 +288,7 @@ async def specialist(state: PlanExecuteState) -> dict[str, Any]:
             "status": "completed",
             "tool_calls": tool_call_log,
             "iterations": iterations_completed,
+            "termination_reason": termination_reason,
         }
     except Exception as exc:
         logger.error("{} 执行失败: {}", definition["label"], exc, exc_info=True)
@@ -194,11 +304,12 @@ async def specialist(state: PlanExecuteState) -> dict[str, Any]:
             "error": str(exc),
             "tool_calls": tool_call_log,
             "iterations": iterations_completed,
+            "termination_reason": "error",
         }
 
     logger.info(
         "{} 调查完成: {} 轮迭代, {} 次工具调用, 置信度 {:.0%}",
-        definition["label"], iterations_completed, len(tool_call_log),
+        definition["label"], iterations_completed, total_tool_calls,
         result.get("confidence", 0),
     )
 
@@ -223,7 +334,7 @@ async def cross_validate(state: PlanExecuteState) -> dict[str, Any]:
         ),
     ]
     try:
-        arbitration = await llm.with_structured_output(Arbitration).ainvoke(messages)
+        arbitration = await _invoke_structured_with_usage(llm, Arbitration, messages, model_name)
         return {"response": arbitration.report, "arbitration": arbitration.model_dump()}
     except Exception as exc:
         logger.error("Supervisor 仲裁失败: {}", exc, exc_info=True)

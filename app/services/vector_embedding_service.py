@@ -41,19 +41,10 @@ class SiliconFlowEmbeddings(Embeddings):
         self.model = model
         self.dimensions = dimensions
         
-        # 打印初始化信息
-        masked_key = self._mask_api_key(api_key)
         logger.info(
             f"SiliconFlow Embeddings 初始化完成 - "
-            f"模型: {model}, 维度: {dimensions}, API Key: {masked_key}"
+            f"模型: {model}, 维度: {dimensions}"
         )
-
-    @staticmethod
-    def _mask_api_key(api_key: str) -> str:
-        """掩码 API Key 用于日志"""
-        if len(api_key) > 8:
-            return f"{api_key[:8]}...{api_key[-4:]}"
-        return "***"
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         """

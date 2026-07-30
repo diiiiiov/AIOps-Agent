@@ -35,7 +35,8 @@ try {
     }
 
     $env:RUN_INTEGRATION = "1"
-    & $python -m pytest tests/test_integration_stack.py -v
+    # 单独运行集成测试时不应用全项目覆盖率门槛；覆盖率由完整单测任务负责。
+    & $python -m pytest tests/test_integration_stack.py -v --no-cov
     if ($LASTEXITCODE -ne 0) { throw "Integration tests failed with exit code $LASTEXITCODE" }
 }
 finally {

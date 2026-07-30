@@ -49,7 +49,7 @@ services:
       - /data
 
   milvus:
-    image: milvusdb/milvus:v2.5.10
+    image: milvusdb/milvus:v2.6.20
     command: ["milvus", "run", "standalone"]
     security_opt:
       - seccomp:unconfined

@@ -15,6 +15,20 @@ from app.services.tool_approval_service import tool_approval_service
 
 
 class ToolGateway:
+    @staticmethod
+    def _message(
+        content: str,
+        call_id: str,
+        *,
+        status: str,
+        duration_ms: float = 0.0,
+    ) -> ToolMessage:
+        return ToolMessage(
+            content=content,
+            tool_call_id=call_id,
+            response_metadata={"status": status, "duration_ms": duration_ms},
+        )
+
     async def execute_calls(
         self, calls: list[dict[str, Any]], tools: list[Any],
         approval_id: str | None = None, approval_token: str | None = None,
@@ -27,7 +41,9 @@ class ToolGateway:
             call_id = call.get("id", name)
             tool = registry.get(name)
             if not tool:
-                messages.append(ToolMessage(content=f"工具不存在: {name}", tool_call_id=call_id))
+                messages.append(
+                    self._message(f"工具不存在: {name}", call_id, status="not_found")
+                )
                 continue
             role = required_role(tool)
             context = get_request_context()
@@ -38,21 +54,27 @@ class ToolGateway:
                 ))
                 if not approved:
                     if not create_pending_approval:
-                        messages.append(ToolMessage(
-                            content="审批令牌无效或已使用。", tool_call_id=call_id
-                        ))
+                        messages.append(
+                            self._message(
+                                "审批令牌无效或已使用。", call_id, status="approval_denied"
+                            )
+                        )
                         continue
                     pending_id = tool_approval_service.create(
                         tenant_id=context.tenant_id, user_id=context.user_id,
                         tool_name=name, args=call.get("args", {}),
                     )
                     audit_event("tool.approval_required", resource=name, outcome="blocked", approval_id=pending_id)
-                    messages.append(ToolMessage(
-                        content=f"该工具属于高风险操作，需要人工审批。审批单: {pending_id}",
-                        tool_call_id=call_id,
-                    ))
+                    messages.append(
+                        self._message(
+                            f"该工具属于高风险操作，需要人工审批。审批单: {pending_id}",
+                            call_id,
+                            status="approval_required",
+                        )
+                    )
                     continue
             started = time.perf_counter()
+            status = "success"
             audit_event("tool.invoke", resource=name, args=redact(call.get("args", {})))
             try:
                 result = await asyncio.wait_for(
@@ -61,13 +83,19 @@ class ToolGateway:
                 duration = round((time.perf_counter() - started) * 1000, 2)
                 audit_event("tool.result", resource=name, duration_ms=duration, result=redact(result))
                 content = result if isinstance(result, str) else json.dumps(result, ensure_ascii=False, default=str)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 audit_event("tool.result", resource=name, outcome="timeout")
                 content = f"工具调用超时（{config.tool_call_timeout_seconds} 秒）"
+                duration = round((time.perf_counter() - started) * 1000, 2)
+                status = "timeout"
             except Exception as exc:
                 audit_event("tool.result", resource=name, outcome="failure", error=str(exc))
                 content = f"工具调用失败: {exc}"
-            messages.append(ToolMessage(content=content, tool_call_id=call_id))
+                duration = round((time.perf_counter() - started) * 1000, 2)
+                status = "failure"
+            messages.append(
+                self._message(content, call_id, status=status, duration_ms=duration)
+            )
         return messages
 
 
